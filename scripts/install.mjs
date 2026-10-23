@@ -1,12 +1,13 @@
 // Installs the two integrations, backing up each file first and preserving every other setting:
-//   1. Codex command hooks in ~/.codex/hooks.json (capture from the ChatGPT desktop app).
+//   1. A local Codex plugin whose lifecycle hooks capture activity in the ChatGPT desktop app.
 //   2. MCP servers in Claude Desktop's claude_desktop_config.json (read-only retrieval, plus an
 //      optional writable filesystem server scoped to folders you name).
 // usage: node scripts/install.mjs [--claude-config <path>] [--writable-folder <dir>]... [--dry-run]
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MARKETPLACE } from "../src/store.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -38,21 +39,43 @@ const save = (file, value) => {
   console.log(`wrote:   ${file}`);
 };
 
-// 1. Codex hooks. Forward slashes work for node in every shell Codex might use.
-const hookScript = path.join(root, "src", "hook.mjs").replaceAll("\\", "/");
-const command = `node ${hookScript.includes(" ") ? JSON.stringify(hookScript) : hookScript}`;
-const EVENTS = { SessionStart: 10, UserPromptSubmit: 10, PreToolUse: 10, PostToolUse: 10, PreCompact: 10, Stop: 10, Interrupt: 3, SessionEnd: 3 };
-const hooksFile = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "hooks.json");
-const hooks = readJson(hooksFile, {});
-hooks.hooks ??= {};
-for (const [event, timeout] of Object.entries(EVENTS)) {
-  const groups = (hooks.hooks[event] ??= []);
+// 1. Codex capture, as a local plugin. Codex runs hooks inside its sandbox; a
+//    standalone ~/.codex/hooks.json hook could not write anywhere (EPERM), while
+//    plugin hooks get a writable PLUGIN_DATA folder. So remove any standalone
+//    entries an earlier version added, then install the plugin into the documented
+//    personal marketplace (https://developers.openai.com/plugins/build/plugins).
+const codexHome = process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
+const hooksFile = path.join(codexHome, "hooks.json");
+if (existsSync(hooksFile)) {
+  const hooks = readJson(hooksFile, {});
   const ours = (h) => typeof h.command === "string" && h.command.includes("desktop-continuity/src/hook.mjs");
-  for (const group of groups) group.hooks = (group.hooks ?? []).filter((h) => !ours(h));
-  hooks.hooks[event] = groups.filter((g) => g.hooks.length > 0);
-  hooks.hooks[event].push({ hooks: [{ type: "command", command, timeout, statusMessage: "Recording for desktop-continuity" }] });
+  for (const [event, groups] of Object.entries(hooks.hooks ?? {})) {
+    for (const group of groups) group.hooks = (group.hooks ?? []).filter((h) => !ours(h));
+    hooks.hooks[event] = groups.filter((g) => g.hooks.length > 0);
+    if (hooks.hooks[event].length === 0) delete hooks.hooks[event];
+  }
+  save(hooksFile, hooks);
 }
-save(hooksFile, hooks);
+
+const pluginDir = path.join(codexHome, "plugins", "desktop-continuity");
+if (dryRun) console.log(`[dry-run] would copy ${path.join(root, "codex-plugin")} to ${pluginDir}`);
+else {
+  cpSync(path.join(root, "codex-plugin"), pluginDir, { recursive: true, force: true });
+  console.log(`copied:  plugin to ${pluginDir}`);
+}
+
+// The marketplace root is the home folder; plugin paths are relative to it.
+const marketplaceFile = path.join(os.homedir(), ".agents", "plugins", "marketplace.json");
+const marketplace = readJson(marketplaceFile, { name: "personal", interface: { displayName: "Personal plugins" }, plugins: [] });
+marketplace.plugins = (marketplace.plugins ?? []).filter((p) => p.name !== "desktop-continuity");
+marketplace.plugins.push({
+  name: "desktop-continuity",
+  source: { source: "local", path: `./${path.relative(os.homedir(), pluginDir).replaceAll("\\", "/")}` },
+  policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
+  category: "Productivity"
+});
+save(marketplaceFile, marketplace);
+if (marketplace.name !== MARKETPLACE) console.log(`note: marketplace is named "${marketplace.name}"; set DESKTOP_CONTINUITY_HOME for the MCP server.`);
 
 // 2. Claude Desktop MCP servers.
 const claudeConfig = claudeConfigCandidates().find(existsSync) ?? claudeConfigCandidates()[0];
@@ -67,4 +90,4 @@ if (writable.length > 0) {
   };
 }
 save(claudeConfig, config);
-console.log("\nNext: in ChatGPT, review and trust the new hooks; fully quit Claude Desktop from the tray and reopen it.");
+console.log("\nNext: restart ChatGPT, install \"Desktop continuity\" from Personal plugins and trust its hooks;\nfully quit Claude Desktop from the tray and reopen it.");

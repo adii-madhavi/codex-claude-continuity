@@ -7,9 +7,14 @@ import path from "node:path";
 // as the event happens, so whatever was observed survives the app or its model
 // stopping. Readers skip unparseable lines, including a torn final line.
 
+// Codex runs hooks inside its sandbox, where only a plugin's PLUGIN_DATA folder
+// is documented as writable. The MCP server (outside Codex) reads the same
+// folder: ~/.codex/plugins/data/<plugin>-<marketplace>.
+export const MARKETPLACE = "personal";
 export const storeRoot = () =>
   process.env.DESKTOP_CONTINUITY_HOME ??
-  path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), ".local", "share"), "desktop-continuity");
+  process.env.PLUGIN_DATA ??
+  path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "plugins", "data", `desktop-continuity-${MARKETPLACE}`);
 
 const sessionsDir = () => path.join(storeRoot(), "sessions");
 

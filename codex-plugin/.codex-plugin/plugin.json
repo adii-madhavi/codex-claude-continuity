@@ -1,0 +1,15 @@
+{
+  "name": "desktop-continuity",
+  "version": "0.1.0",
+  "description": "Records Codex and local Work activity so Claude Desktop can continue an interrupted task.",
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Desktop continuity",
+    "shortDescription": "Record activity for Claude Desktop takeover",
+    "longDescription": "Lifecycle hooks append a redacted, size-bounded event per prompt, tool call, tool result and turn end to this plugin's data folder. Claude Desktop reads it through a separate read-only MCP server.",
+    "developerName": "desktop-continuity",
+    "category": "Productivity",
+    "capabilities": ["Lifecycle hooks"]
+  }
+}

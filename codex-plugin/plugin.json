@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "desktop-continuity",
+  "version": "0.1.0",
+  "description": "Records Codex and local Work activity so Claude Desktop can continue an interrupted task."
+}
