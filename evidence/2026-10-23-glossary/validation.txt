@@ -1,0 +1,9 @@
+PASS title/preamble unchanged
+PASS same 6 headings in the same order
+PASS ## Latency: was finished, unchanged byte-for-byte
+PASS ## Throughput: was finished, unchanged byte-for-byte
+PASS ## Idempotency: was finished, unchanged byte-for-byte
+PASS ## Backpressure: was unfinished, now has a definition and an Example line
+PASS ## Circuit breaker: was unfinished, now has a definition and an Example line
+PASS ## Eventual consistency: was unfinished, now has a definition and an Example line
+VALID: 3 finished section(s) preserved check, 3 unfinished section(s) completion check

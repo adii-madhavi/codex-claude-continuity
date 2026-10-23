@@ -1,0 +1,23 @@
+diff --git a/evidence/2026-10-23-glossary/before.md b/evidence/2026-10-23-glossary/after.md
+index 233773c..73bc34b 100644
+--- a/evidence/2026-10-23-glossary/before.md
++++ b/evidence/2026-10-23-glossary/after.md
+@@ -13,10 +13,13 @@ Idempotency means that repeating the same operation has the same effect as doing
+ Example: Sending the same payment request twice with the same idempotency key charges the customer only once.
+ 
+ ## Backpressure
+-TODO: definition and example
++Backpressure is a way for a busy part of a system to tell the parts sending it work to slow down. Instead of accepting more than it can handle and crashing, it pushes the pressure back toward the sender.
++Example: A message queue that is nearly full tells producers to pause sending until consumers catch up.
+ 
+ ## Circuit breaker
+-TODO: definition and example
++A circuit breaker stops a service from repeatedly calling another service that keeps failing. After too many errors it "opens" and fails requests right away, then later lets a few test requests through to see if the other service has recovered.
++Example: If a payment service times out five times in a row, the checkout service stops calling it for 30 seconds and shows a "try again later" message instead.
+ 
+ ## Eventual consistency
+-TODO: definition and example
+\ No newline at end of file
++Eventual consistency means that copies of data stored in different places may briefly disagree, but they will all end up the same if no new changes are made. The system chooses to stay fast and available instead of making every copy match instantly.
++Example: After you change your profile picture, a friend in another country might still see the old one for a few seconds before the update reaches their nearby server.
+\ No newline at end of file

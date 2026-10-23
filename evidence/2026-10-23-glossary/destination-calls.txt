@@ -1,0 +1,15 @@
+# desktop-continuity MCP calls from the Claude Desktop chat (server's own log)
+2026-10-23T07:03:10.728Z get_checkpoint args={"session_ref":1792738502442} paramKeys=name,arguments
+2026-10-23T07:03:11.558Z get_source_status args={"session_ref":1792738502442} paramKeys=name,arguments
+2026-10-23T07:03:19.222Z get_event args={"seq":2,"session_ref":1792738502442} paramKeys=name,arguments
+
+# Claude Desktop main.log: folder grant and VM shell writes (12:30-12:42 local)
+2026-10-23 12:30:50 [info] [CCD] Added 1 directory grant(s) to session local_668919e5-a7b5-4e34-875e-0d54201d46df
+2026-10-23 12:32:46 [info] LocalAgentModeSessions.addTrustedFolder: C:\Users\adi\Documents\Codex\2026-10-23\referenced-chatgpt-conversation-this-is-an-2
+2026-10-23 12:33:03 [info] LocalAgentModeSessions.grantRemoteSessionFolders: cse_01LP9uBuKacyp3AmSSr68uoo [1]
+2026-10-23 12:33:03 [info] grantRemoteSessionFolders: showing consent dialog for cse_01LP9uBuKacyp3AmSSr68uoo (1 folder(s), window focused, default Allow, waited 429ms)
+2026-10-23 12:33:05 [info] grantRemoteSessionFolders: user allowed for cse_01LP9uBuKacyp3AmSSr68uoo (dwell 1662ms, remember=false)
+2026-10-23 12:33:15 [info] [remote-bash] vmUser=rcw-01lp9ubukacyp3amssr68uoo mounts=referenced-chatgpt-conversation-this-is-an-2:rw cmdLen=91
+2026-10-23 12:40:51 [info] [remote-bash] vmUser=rcw-01lp9ubukacyp3amssr68uoo mounts=referenced-chatgpt-conversation-this-is-an-2:rw cmdLen=613
+2026-10-23 12:40:55 [info] [remote-bash] vmUser=rcw-01lp9ubukacyp3amssr68uoo mounts=referenced-chatgpt-conversation-this-is-an-2:rw cmdLen=715
+2026-10-23 12:40:59 [info] [remote-bash] vmUser=rcw-01lp9ubukacyp3amssr68uoo mounts=referenced-chatgpt-conversation-this-is-an-2:rw cmdLen=796
