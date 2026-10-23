@@ -1,0 +1,20 @@
+{
+  "name": "desktop-continuity",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Records Codex desktop activity through documented hooks and serves a read-only checkpoint to Claude Desktop over MCP.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "install-integrations": "node scripts/install.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "@modelcontextprotocol/server-filesystem": "2026.8.31",
+    "zod": "4.4.3"
+  }
+}
