@@ -1,0 +1,22 @@
+# Cowork takeover of session 01a167b2 (src/takeover.mjs --wait=600)
+Opened a Claude Desktop Cowork session for 01a167b2-175d-7d42-8f2d-a5a005a5386f with the prompt prefilled and its project folder attached.
+Confirm the folder, review the prompt, then press Send. (The prompt is also on the clipboard.)
+Waiting up to 600 s for the destination to call desktop-continuity for this session...
+Destination connected: first desktop-continuity call for this session after 199 s.
+
+[exited with code 0]
+
+# desktop-continuity MCP calls (server log)
+2026-10-23T07:44:21.437Z get_checkpoint args={"session_ref":1792741087069} paramKeys=name,arguments
+2026-10-23T07:44:22.259Z get_source_status args={"session_ref":1792741087069} paramKeys=name,arguments
+2026-10-23T07:44:30.090Z read_project_file args={"path":"glossary.md","session_ref":1792741087069} paramKeys=name,arguments
+2026-10-23T07:44:30.673Z list_project_files args={"session_ref":1792741087069} paramKeys=name,arguments
+
+# Claude Desktop main.log after the folder grant: no remote-bash / VM write lines
+2026-10-23 13:14:14 [info] LocalAgentModeSessions.grantRemoteSessionFolders: cse_01TbSQyv3JM167AQba7QadHX [1]
+2026-10-23 13:14:14 [info] grantRemoteSessionFolders: showing consent dialog for cse_01TbSQyv3JM167AQba7QadHX (1 folder(s), window focused, default Allow, waited 377ms)
+2026-10-23 13:14:16 [info] grantRemoteSessionFolders: user allowed for cse_01TbSQyv3JM167AQba7QadHX (dwell 1850ms, remember=false)
+
+# File after the user approved Cowork's edits (13:16 local)
+2590b55eca1a4dda25224cd2c60b27efd9134290b0c265017516081382e28cc6 *glossary.md
+2026-10-23 13:08:54.083860400 +0530 778 bytes

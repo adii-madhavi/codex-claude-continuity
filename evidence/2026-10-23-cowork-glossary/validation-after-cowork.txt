@@ -1,0 +1,9 @@
+PASS title/preamble unchanged
+PASS same 6 headings in the same order
+PASS ## Hashing: was finished, unchanged byte-for-byte
+PASS ## Salting: was finished, unchanged byte-for-byte
+FAIL ## CSRF: was unfinished, now has a definition and an Example line
+FAIL ## XSS: was unfinished, now has a definition and an Example line
+FAIL ## CORS: was unfinished, now has a definition and an Example line
+FAIL ## Rate limiting: was unfinished, now has a definition and an Example line
+INVALID: 2 finished section(s) preserved check, 4 unfinished section(s) completion check
