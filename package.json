@@ -12,7 +12,8 @@
     "check": "node scripts/check.mjs",
     "install-integrations": "node scripts/install.mjs",
     "check-limits": "node scripts/check-limits.mjs",
-    "check-takeover": "node scripts/check-takeover.mjs"
+    "check-takeover": "node scripts/check-takeover.mjs",
+    "watch": "node src/watch.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

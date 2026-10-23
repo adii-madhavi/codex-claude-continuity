@@ -66,5 +66,26 @@ hook("01a16801-0000-7000-8000-000000000007", "limit-error", "UserPromptSubmit");
 assert.equal(launches().length, 1, "only a turn end with limit_reached may launch");
 assert.match(launches()[0], /dry-run 01a16801-0000-7000-8000-000000000001 via cowork\+folder usage limit \(error event at /, "an existing project folder is attached through the Cowork link");
 
+// Watcher path: a recorded session whose transcript reaches a limit, with NO Stop hook
+// (as if Codex never fired one). The watcher opens takeover once; a later pass and a
+// later Stop for the same signal open nothing more.
+const watchSession = "01a16801-0000-7000-8000-000000000009";
+hook(watchSession, "window-full", "UserPromptSubmit");
+const forSession = (id) => launches().filter((l) => l.includes(id));
+const once = () => spawnSync(process.execPath, [path.join(here, "..", "src", "watch.mjs"), "--once"], { env, encoding: "utf8" });
+assert.equal(once().status, 0);
+assert.equal(forSession(watchSession).length, 1, "the watcher opens takeover without a Stop hook");
+assert.match(forSession(watchSession)[0], /usage limit seen by the watcher/);
+// Session ...0007 only ever got UserPromptSubmit, so no hook claimed it: the watcher covers it too.
+assert.equal(forSession("01a16801-0000-7000-8000-000000000007").length, 1);
+assert.equal(forSession("01a16801-0000-7000-8000-000000000001").length, 1, "a signal the hook already claimed is not reopened");
+for (const id of ["000000000002", "000000000003", "000000000004", "000000000005", "000000000006"]) {
+  assert.equal(forSession(`01a16801-0000-7000-8000-${id}`).length, 0, "no launch without limit_reached");
+}
+once();
+hook(watchSession, "window-full", "Stop");
+assert.equal(forSession(watchSession).length, 1, "watcher and hook share one claim per signal");
+
 console.log("PASS limit detector:", JSON.stringify(results));
+console.log("PASS watcher: opens once without a Stop hook; a second pass and a later Stop add nothing");
 console.log("PASS takeover launches: 1 for 2 identical Stop signals; 0 for prose, approaching, unknown, truncated, resumed, non-Stop");
