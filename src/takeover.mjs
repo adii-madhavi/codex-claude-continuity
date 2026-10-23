@@ -3,9 +3,11 @@ import { fileURLToPath } from "node:url";
 import { listSessionIds } from "./store.mjs";
 
 // Desktop takeover. Claude Desktop's documented `claude://claude.ai/new?q=`
-// link opens a new chat with the prompt prefilled; it never sends it
-// (https://support.claude.com/en/articles/14729294). So takeover is one click
-// on Send, and nothing here drives the Claude or ChatGPT UI.
+// link opens a new chat and should prefill the prompt
+// (https://support.claude.com/en/articles/14729294); it never sends it. Claude
+// Desktop 3.6556 on Windows opened the chat but left the box empty, so the
+// prompt also goes on the clipboard: takeover is Ctrl+V and Send. Nothing here
+// drives the Claude or ChatGPT UI.
 
 export const takeoverPrompt = (sessionId, why) => [
   `Continue my interrupted Codex desktop task (recorded session ${sessionId}${why ? `; trigger: ${why}` : ""}).`,
@@ -17,7 +19,17 @@ export const takeoverPrompt = (sessionId, why) => [
 
 export const takeoverUrl = (sessionId, why) => `claude://claude.ai/new?q=${encodeURIComponent(takeoverPrompt(sessionId, why))}`;
 
+const copyToClipboard = (text) => {
+  if (process.platform !== "win32") return;
+  // The prompt is ASCII, which clip.exe copies as-is (a UTF-16 BOM would be pasted too).
+  const clip = spawn("clip", [], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+  clip.on("error", () => {});
+  clip.stdin.on("error", () => {});
+  clip.stdin.end(text.replace(/[^\x20-\x7E\n]/g, "?"));
+};
+
 export const openTakeover = (sessionId, why) => {
+  copyToClipboard(takeoverPrompt(sessionId, why));
   // explorer.exe hands a URL to its registered protocol handler without a shell parsing it.
   const child = spawn(process.platform === "win32" ? "explorer.exe" : "xdg-open", [takeoverUrl(sessionId, why)], {
     detached: true,
@@ -36,5 +48,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(1);
   }
   openTakeover(sessionId, "manual takeover");
-  console.log(`Opened Claude Desktop with a continuation prompt for session ${sessionId}. Review it, then press Send.`);
+  console.log(`Opened a new Claude Desktop chat for session ${sessionId}; the continuation prompt is on the clipboard.\nIf the message box is empty, press Ctrl+V. Review it, then press Send.`);
 }
