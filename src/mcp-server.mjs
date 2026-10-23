@@ -2,14 +2,14 @@
 // checkpoints, events and the recorded project's files. It has no tool that
 // writes, runs commands, or drives any desktop app.
 
-import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
 import { redactSecrets } from "./redact.mjs";
-import { assertSessionId, readEvents } from "./store.mjs";
+import { assertSessionId, readEvents, storeRoot } from "./store.mjs";
 import { takeoverPrompt } from "./takeover.mjs";
 
 const MAX_RESPONSE_CHARS = 20_000;
@@ -154,4 +154,29 @@ server.registerPrompt("continue_task", {
   messages: [{ role: "user", content: { type: "text", text: takeoverPrompt(assertSessionId(session_id), "manual takeover") } }]
 }));
 
-await server.connect(new StdioServerTransport());
+// Call log: which tool arrived with which arguments, before validation. Claude
+// Desktop's chat reaches this server through a bridge that does not appear in
+// its own MCP logs, so this is the only record of what actually arrived.
+// Arguments are redacted and cut short; this is local evidence, not telemetry.
+const logCall = (msg) => {
+  if (msg?.method !== "tools/call") return;
+  try {
+    mkdirSync(storeRoot(), { recursive: true });
+    const args = redactSecrets(JSON.stringify(msg.params?.arguments ?? null)).slice(0, 300);
+    appendFileSync(path.join(storeRoot(), "mcp-calls.log"), `${new Date().toISOString()} ${msg.params?.name} args=${args} paramKeys=${Object.keys(msg.params ?? {}).join(",")}\n`);
+  } catch {}
+};
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+const deliver = transport.onmessage;
+transport.onmessage = (msg, extra) => {
+  logCall(msg);
+  // Some bridges rename the argument; accept the obvious aliases rather than fail.
+  const args = msg?.method === "tools/call" ? msg.params?.arguments : undefined;
+  if (args && typeof args === "object" && args.session_id === undefined) {
+    const alias = args.sessionId ?? args.sessionID ?? args.session ?? args.id;
+    if (typeof alias === "string") args.session_id = alias;
+  }
+  deliver?.(msg, extra);
+};

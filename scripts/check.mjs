@@ -3,7 +3,7 @@
 // usage: node scripts/check.mjs
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +61,9 @@ assert.match(cp.recentActions.find((a) => a.tool === "Bash").outcome, /^UNKNOWN/
 assert.deepEqual(cp.filesTouched.map((f) => f.path), ["notes.md"]);
 assert.equal(cp.sourceStatus.turn.state, "no end of turn recorded");
 assert.equal(cp.sourceStatus.usage.limitReached, true);
+
+assert.equal(JSON.parse(await call("get_checkpoint", { sessionId: session })).session_id, session, "sessionId alias");
+assert.match(readFileSync(path.join(tmp, "store", "mcp-calls.log"), "utf8"), /get_checkpoint args=\{"sessionId"/);
 
 const page = JSON.parse(await call("get_events", { session_id: session, event: "PreToolUse" }));
 assert.equal(page.rows.length, 2);
