@@ -7,7 +7,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SECRET_FILE, SKIP_DIRS, buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
+import { SECRET_FILE, SKIP_DIRS, buildCheckpoint, listSessions, pickLatestEligible, sourceStatus } from "./checkpoint.mjs";
 import { redactSecrets } from "./redact.mjs";
 import { assertSessionId, readEvents, resolveSession, storeRoot } from "./store.mjs";
 import { takeoverPrompt } from "./takeover.mjs";
@@ -46,7 +46,11 @@ const compact = (e) => ({
 const projectRoot = (sessionId) => {
   const cwd = readEvents(assertSessionId(sessionId)).findLast((e) => e.cwd)?.cwd;
   if (!cwd) throw new Error("This session has no recorded project directory.");
-  return realpathSync(cwd);
+  try {
+    return realpathSync(cwd);
+  } catch {
+    throw new Error(`The recorded project folder ${cwd} no longer exists (moved or deleted). Ask the user where it is now; do not guess another folder.`);
+  }
 };
 
 const insideProject = (sessionId, relative) => {
@@ -160,12 +164,17 @@ server.registerPrompt("continue_task", {
 // No arguments, so nothing for a client bridge to drop. It names the session it
 // picked inside the message, which the user sees before sending.
 server.registerPrompt("continue_latest", {
-  title: "Continue the latest recorded Codex task",
-  description: "Explicit takeover of the most recently active session recorded from the ChatGPT desktop app."
+  title: "Continue the latest unfinished Codex task",
+  description: "Explicit takeover of the newest unfinished session recorded from the ChatGPT desktop app. Lists the candidates instead of picking when the choice is ambiguous."
 }, () => {
-  const latest = listSessions(undefined, 1)[0];
-  if (!latest) throw new Error("No recorded session yet.");
-  return { messages: [{ role: "user", content: { type: "text", text: takeoverPrompt(latest.session_id, `manual takeover of the latest session (${latest.project})`) } }] };
+  const pick = pickLatestEligible();
+  const line = (c) => `- session_ref ${c.session_ref}: ${c.project} — "${c.firstRequest ?? "(no request recorded)"}" (${c.reason}, last activity ${c.lastActivity})`;
+  const text = pick.status === "picked"
+    ? takeoverPrompt(pick.session.session_id, `manual takeover of the latest unfinished session (${pick.session.project})`)
+    : pick.status === "ambiguous"
+      ? `More than one recorded Codex task is unfinished, so none was chosen automatically:\n${pick.candidates.map(line).join("\n")}\nAsk me which one to continue, then follow the desktop-continuity takeover steps for that session_ref.`
+      : "No unfinished recorded Codex task was found (completed and simulated sessions are excluded). Tell me so, and call list_sessions if I want to choose one anyway.";
+  return { messages: [{ role: "user", content: { type: "text", text } }] };
 });
 
 // Call log: which tool arrived with which arguments, before validation. Claude

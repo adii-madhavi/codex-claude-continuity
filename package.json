@@ -11,7 +11,8 @@
   "scripts": {
     "check": "node scripts/check.mjs",
     "install-integrations": "node scripts/install.mjs",
-    "check-limits": "node scripts/check-limits.mjs"
+    "check-limits": "node scripts/check-limits.mjs",
+    "check-takeover": "node scripts/check-takeover.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

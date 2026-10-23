@@ -103,7 +103,8 @@ export const pairActions = (events) => {
 const turnStatus = (events) => {
   const lastPrompt = events.findLast((e) => e.event === "UserPromptSubmit");
   const after = lastPrompt ? events.filter((e) => e.seq > lastPrompt.seq) : events;
-  const end = after.findLast((e) => ["Stop", "Interrupt", "SessionEnd"].includes(e.event));
+  // A SessionEnd after a Stop/Interrupt only closes the thread; the turn's own end decides.
+  const end = after.findLast((e) => e.event === "Stop" || e.event === "Interrupt") ?? after.findLast((e) => e.event === "SessionEnd");
   if (!lastPrompt) return { state: "no request recorded", detail: "Recording may have started mid-session." };
   if (end?.event === "Stop") return { state: "turn ended", detail: "Codex reported the end of the turn (Stop hook). This does not prove the task is finished." };
   if (end?.event === "Interrupt") return { state: "interrupted", detail: "The user interrupted the turn in the source app." };
@@ -138,6 +139,10 @@ export const sourceStatus = (events) => {
     usage,
     projectChangedAfterLastEvent: projectChanges.changed,
     mayStillBeWorking,
+    // The gate a destination must respect before changing shared files. It is
+    // advisory (this server cannot block writes made by other tools), so the
+    // takeover prompt also requires the user's OK before the first edit.
+    destinationMayEdit: !mayStillBeWorking,
     advice: mayStillBeWorking
       ? "The source app may still be working on this task. Do not repeat actions or edit shared files; ask the user to confirm it has stopped."
       : projectChanges.changed.length
@@ -156,8 +161,44 @@ export const sessionSummary = (id) => {
     firstRequest: clip(first?.prompt, 160),
     events: events.length,
     lastActivity: events.at(-1)?.ts,
-    turn: turnStatus(events).state
+    turn: turnStatus(events).state,
+    ...(events.some((e) => e.simulated) ? { simulated: true } : {}),
+    // No transcript path at all: an ephemeral thread, e.g. the app's own background
+    // suggestions (hooks document transcript_path as nullable).
+    ...(events.length && !events.some((e) => e.transcript) ? { ephemeral: true } : {})
   };
+};
+
+const ELIGIBLE_STATES = new Set(["interrupted", "no end of turn recorded", "session ended"]);
+const AMBIGUITY_WINDOW_MS = 12 * 3600_000;
+
+/**
+ * The session continue_latest may take over: the newest non-simulated session
+ * that is unfinished (interrupted, never ended, limit reached, or with
+ * unfinished markers in its files). If another unfinished session from a
+ * different project was active within 12 hours of it, the choice is ambiguous
+ * and nothing is picked. Completed tasks are never picked.
+ */
+export const pickLatestEligible = (scan = 20) => {
+  const candidates = [];
+  for (const { id } of listSessionIds().slice(0, scan)) {
+    const s = sessionSummary(id);
+    if (s.simulated || s.ephemeral || s.events === 0) continue;
+    const cp = buildCheckpoint(id);
+    const artifacts = cp.observed.artifacts.filter((a) => a.now.exists === true);
+    // Interrupted, but every touched file is now marker-free and was changed after
+    // the recording ended: someone already continued it. Not offered again.
+    const continuedElsewhere = artifacts.length > 0 && cp.inferred.remainingWork.length === 0 && artifacts.some((a) => a.now.modifiedAfterLastEvent);
+    let reason = ELIGIBLE_STATES.has(s.turn) && !continuedElsewhere ? `turn ${s.turn}` : undefined;
+    if (!reason && cp.sourceStatus.usage.status === "limit_reached") reason = "usage limit reached";
+    if (!reason && cp.inferred.remainingWork.length) reason = `${cp.inferred.remainingWork.length} unfinished marker(s) in touched files`;
+    if (reason) candidates.push({ ...s, reason });
+  }
+  if (candidates.length === 0) return { status: "none", candidates };
+  const [first, ...rest] = candidates;
+  const rivals = rest.filter((c) => c.project?.toLowerCase() !== first.project?.toLowerCase() &&
+    Date.parse(first.lastActivity) - Date.parse(c.lastActivity) < AMBIGUITY_WINDOW_MS);
+  return rivals.length ? { status: "ambiguous", candidates: [first, ...rivals] } : { status: "picked", session: first, candidates };
 };
 
 export const buildCheckpoint = (id) => {
@@ -174,11 +215,17 @@ export const buildCheckpoint = (id) => {
   // whose on-disk mtime falls inside the recorded session, whatever wrote it.
   if (project) {
     const firstMs = Date.parse(events[0].ts) - 2000;
+    // Files changed after the recording stay listed (now.modifiedAfterLastEvent is set),
+    // so a file the source wrote and someone later finished is not dropped.
     for (const c of changedSince(project, firstMs).changed) {
-      if (Date.parse(c.modifiedAt) > lastMs + 2000) continue; // after the recording: reported as stale instead
       const key = path.resolve(project, c.path).toLowerCase();
       if (![...files.keys()].some((k) => path.resolve(project, k).toLowerCase() === key)) {
-        files.set(c.path.toLowerCase(), { path: c.path, change: "modified on disk during the session (writing tool not identified)", outcome: "observed on disk" });
+        const after = Date.parse(c.modifiedAt) > lastMs + 2000;
+        files.set(c.path.toLowerCase(), {
+          path: c.path,
+          change: after ? "changed on disk after the recording ended (by the source or someone else)" : "modified on disk during the session (writing tool not identified)",
+          outcome: "observed on disk"
+        });
       }
     }
   }

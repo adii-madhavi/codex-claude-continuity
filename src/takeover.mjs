@@ -15,22 +15,51 @@ import { listSessionIds, readEvents, sessionRef, storeRoot } from "./store.mjs";
 
 export const takeoverPrompt = (sessionId, why) => [
   `Continue my interrupted Codex desktop task (recorded session ${sessionId}${why ? `; trigger: ${why}` : ""}).`,
+  ...(missingFolder(sessionId) ? [`NOTE: the recorded project folder ${missingFolder(sessionId)} no longer exists at that path. Ask me where it is now before reading or editing any file.`] : []),
   `1. Call the desktop-continuity tool get_checkpoint with session_ref ${sessionRef(sessionId)} (an integer). Read it first: it holds my requests and answers, the files written so far, actions with unknown outcomes, and remaining work inferred from those files.`,
-  "2. Call get_source_status with the same session_ref. If the source may still be working, or the project changed after the last recorded event, stop and tell me.",
+  "2. Call get_source_status with the same session_ref. If destinationMayEdit is false, the source may still be working, or the project changed after the last recorded event, stop and tell me.",
   "3. Do not ask me again for anything the checkpoint records; ask only about what it marks missing.",
   "4. Read the files under filesTouched and continue those same files: keep finished parts as they are and complete what remains. Do not write a replacement.",
   "5. Before your first edit, tell me in one line the evidence that the source stopped and which files you will change, and wait for my OK.",
   "6. Treat actions marked UNKNOWN as unconfirmed: check the files before repeating them."
 ].join("\n");
 
+const recordedFolder = (sessionId) => readEvents(sessionId).findLast((e) => e.cwd)?.cwd;
+const isDir = (p) => {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};
 /** The recorded project folder, when it still exists on disk. */
 const projectFolder = (sessionId) => {
-  const cwd = readEvents(sessionId).findLast((e) => e.cwd)?.cwd;
-  try {
-    return cwd && statSync(cwd).isDirectory() ? cwd : undefined;
-  } catch {
-    return undefined;
+  const cwd = recordedFolder(sessionId);
+  return cwd && isDir(cwd) ? cwd : undefined;
+};
+/** The recorded folder when it was recorded but is gone (moved or deleted). */
+const missingFolder = (sessionId) => {
+  const cwd = recordedFolder(sessionId);
+  return cwd && !isDir(cwd) ? cwd : undefined;
+};
+
+/**
+ * Bounded readiness check: waits until the desktop-continuity server logs a
+ * tool call naming this session (Cowork can take a minute or more to start),
+ * instead of guessing a startup time. Resolves to seconds waited, or null.
+ */
+export const waitForDestination = async (sessionId, sinceIso, timeoutSec = 240) => {
+  const marker = `"session_ref":${sessionRef(sessionId)}`;
+  const file = path.join(storeRoot(), "mcp-calls.log");
+  const started = Date.now();
+  while (Date.now() - started < timeoutSec * 1000) {
+    try {
+      const hit = readFileSync(file, "utf8").split("\n").find((l) => l.slice(0, 24) >= sinceIso && l.includes(marker));
+      if (hit) return Math.round((Date.now() - started) / 1000);
+    } catch {}
+    await new Promise((r) => setTimeout(r, 2000));
   }
+  return null;
 };
 
 export const takeoverUrl = (sessionId, why, route = process.env.DESKTOP_CONTINUITY_ROUTE) => {
@@ -93,14 +122,28 @@ export const openTakeover = async (sessionId, why) => {
   child.unref();
 };
 
-// `node src/takeover.mjs [session_id] [--again]`: the explicit takeover action
-// (defaults to the most recent session). Refuses a second chat for a session
-// that already had one unless --again is given.
+// `node src/takeover.mjs [session_id] [--again] [--wait[=seconds]]`: the explicit
+// takeover action. Without a session id it takes the newest unfinished session,
+// and lists the candidates instead when that is ambiguous. Refuses a second chat
+// for a session that already had one unless --again is given. --wait reports when
+// the destination first calls the server for this session.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const again = process.argv.includes("--again");
-  const sessionId = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? listSessionIds()[0]?.id;
+  const { pickLatestEligible } = await import("./checkpoint.mjs");
+  const args = process.argv.slice(2);
+  const again = args.includes("--again");
+  const waitArg = args.find((a) => a.startsWith("--wait"));
+  let sessionId = args.find((a) => !a.startsWith("--"));
   if (!sessionId) {
-    console.error("No recorded Codex session yet.");
+    const pick = pickLatestEligible();
+    if (pick.status !== "picked") {
+      console.error(pick.status === "none" ? "No unfinished recorded Codex session (completed, simulated and background threads are excluded)."
+        : `More than one unfinished session; pass one of these ids:\n${pick.candidates.map((c) => `  ${c.session_id}  ${c.project}  (${c.reason})`).join("\n")}`);
+      process.exit(1);
+    }
+    sessionId = pick.session.session_id;
+  }
+  if (!listSessionIds().some((s) => s.id === sessionId)) {
+    console.error(`No recorded session ${sessionId}.`);
     process.exit(1);
   }
   const earlier = takeoverClaims(sessionId);
@@ -108,9 +151,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     console.error(`A takeover chat was already opened for ${sessionId} (${earlier.map((c) => `${c.key} at ${c.at}`).join("; ")}).\nContinue in that chat, or pass --again to open another.`);
     process.exit(2);
   }
-  claimTakeover(sessionId, `manual@${new Date().toISOString()}`);
+  const launchedAt = new Date().toISOString();
+  claimTakeover(sessionId, `manual@${launchedAt}`);
   await openTakeover(sessionId, "manual takeover");
+  const gone = missingFolder(sessionId);
   console.log(takeoverUrl(sessionId, "").startsWith("claude://cowork")
     ? `Opened a Claude Desktop Cowork session for ${sessionId} with the prompt prefilled and its project folder attached.\nConfirm the folder, review the prompt, then press Send. (The prompt is also on the clipboard.)`
-    : `Opened a new Claude Desktop chat for ${sessionId}; the continuation prompt is on the clipboard.\nPress Ctrl+V, review it, then press Send.`);
+    : `Opened a new Claude Desktop chat for ${sessionId}; the continuation prompt is on the clipboard.\n${gone ? `The recorded folder ${gone} no longer exists, so no folder was attached; the prompt tells Claude to ask where it moved. ` : ""}Press Ctrl+V, review it, then press Send.`);
+  if (waitArg) {
+    const limit = Number(waitArg.split("=")[1]) || 240;
+    console.log(`Waiting up to ${limit} s for the destination to call desktop-continuity for this session...`);
+    const waited = await waitForDestination(sessionId, launchedAt, limit);
+    console.log(waited === null
+      ? `No call for this session within ${limit} s. Cowork may still be starting, waiting for Send or tool approval, or unable to reach the server: see "Recovery" in the README. Nothing has failed yet; rerun with --wait to keep watching (no new chat is opened without --again).`
+      : `Destination connected: first desktop-continuity call for this session after ${waited} s.`);
+  }
 }
