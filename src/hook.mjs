@@ -64,12 +64,12 @@ const toEvent = (p) => ({
 // the continuation prompt. Only a classified limit counts (never prose,
 // "approaching" or "unknown"), and each limit signal launches at most once.
 // Unverified: whether Codex fires Stop for a turn that ends in a limit error.
-const maybeAutoTakeover = (event) => {
+const maybeAutoTakeover = async (event) => {
   if (event.event !== "Stop" || process.env.DESKTOP_CONTINUITY_NO_AUTO_TAKEOVER) return;
   const usage = readUsageSignals(event.transcript);
   if (usage.status !== "limit_reached") return;
   if (!claimTakeover(event.session, `limit@${usage.signal.at}`)) return;
-  openTakeover(event.session, `${event.simulated ? "SIMULATED " : ""}usage limit (${usage.signal.kind} at ${usage.signal.at})`);
+  await openTakeover(event.session, `${event.simulated ? "SIMULATED " : ""}usage limit (${usage.signal.kind} at ${usage.signal.at})`);
 };
 
 let event;
@@ -77,7 +77,7 @@ try {
   event = toEvent(await read());
   appendEvent(event);
   logRun(`ok ${event.event} ${event.session}`);
-  maybeAutoTakeover(event);
+  await maybeAutoTakeover(event);
 } catch (error) {
   // Recording is best-effort; Codex must continue regardless.
   const message = error instanceof Error ? error.message : String(error);

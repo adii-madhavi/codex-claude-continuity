@@ -46,23 +46,26 @@ export const takeoverClaims = (sessionId) => {
   }
 };
 
-const copyToClipboard = (text) => {
-  if (process.platform !== "win32") return;
+/** Resolves when clip.exe has finished (or after 2 s), so a caller that exits next does not cut it off. */
+const copyToClipboard = (text) => new Promise((resolve) => {
+  if (process.platform !== "win32") return resolve();
   // The prompt is ASCII, which clip.exe copies as-is (a UTF-16 BOM would be pasted too).
   const clip = spawn("clip", [], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
-  clip.on("error", () => {});
+  const timer = setTimeout(resolve, 2000);
+  clip.on("error", () => { clearTimeout(timer); resolve(); });
+  clip.on("close", () => { clearTimeout(timer); resolve(); });
   clip.stdin.on("error", () => {});
   clip.stdin.end(text.replace(/[^\x20-\x7E\n]/g, "?"));
-};
+});
 
-export const openTakeover = (sessionId, why) => {
+export const openTakeover = async (sessionId, why) => {
   const dryRun = Boolean(process.env.DESKTOP_CONTINUITY_TAKEOVER_DRYRUN);
   try {
     mkdirSync(storeRoot(), { recursive: true });
     appendFileSync(launchesFile(), `${new Date().toISOString()} ${dryRun ? "dry-run" : "launch"} ${sessionId} ${why}\n`);
   } catch {}
   if (dryRun) return;
-  copyToClipboard(takeoverPrompt(sessionId, why));
+  await copyToClipboard(takeoverPrompt(sessionId, why));
   // explorer.exe hands a URL to its registered protocol handler without a shell parsing it.
   const child = spawn(process.platform === "win32" ? "explorer.exe" : "xdg-open", [takeoverUrl(sessionId, why)], {
     detached: true,
@@ -89,6 +92,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(2);
   }
   claimTakeover(sessionId, `manual@${new Date().toISOString()}`);
-  openTakeover(sessionId, "manual takeover");
+  await openTakeover(sessionId, "manual takeover");
   console.log(`Opened a new Claude Desktop chat for session ${sessionId}; the continuation prompt is on the clipboard.\nIf the message box is empty, press Ctrl+V. Review it, then press Send.`);
 }

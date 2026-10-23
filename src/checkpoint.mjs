@@ -196,6 +196,7 @@ export const buildCheckpoint = (id) => {
   if (transcriptMessages.length === 0) missing.push("No completed assistant messages found in the transcript tail.");
   if (status.projectChangedAfterLastEvent.length) missing.push("STALE: project files changed after the last recorded event (see sourceStatus).");
   if (artifacts.some((a) => a.now.exists === false)) missing.push("Some recorded files no longer exist on disk.");
+  if (events.some((e) => e.simulated)) missing.unshift("SIMULATED: this session contains events produced by a test trigger, not by Codex.");
   return {
     session_ref: sessionRef(id),
     session_id: id,
