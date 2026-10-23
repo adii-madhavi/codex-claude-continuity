@@ -82,6 +82,10 @@ const touchedFiles = (event) => {
   return files;
 };
 
+// Error signatures in a tool's output text. Live case: a Codex PowerShell edit
+// returned "ParserError: ..." and changed nothing, yet only "result recorded" was shown.
+const FAILURE_TEXT = /ParserError|Exception|Traceback|\berror\b[:\s]|exit code [1-9]|is not recognized|No such file|Permission denied|EPERM|ENOENT/i;
+
 /** Tool calls paired by tool_use_id. No PostToolUse means the outcome is unknown, not failed and not succeeded. */
 export const pairActions = (events) => {
   const actions = new Map();
@@ -95,7 +99,11 @@ export const pairActions = (events) => {
   }
   return [...actions.values()].map((a) => ({
     ...a,
-    outcome: a.resultSeq ? "result recorded" : "UNKNOWN: no result was recorded; verify before repeating",
+    outcome: !a.resultSeq
+      ? "UNKNOWN: no result was recorded; verify before repeating"
+      : FAILURE_TEXT.test(String(typeof a.response === "string" ? a.response : JSON.stringify(a.response ?? "")).slice(0, 600))
+        ? "result recorded, and its output reports an error (read from the output text): treat the action as not done"
+        : "result recorded",
     files: touchedFiles(a)
   }));
 };

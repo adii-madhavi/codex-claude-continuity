@@ -34,6 +34,9 @@ hook({ hook_event_name: "SessionStart", source: "startup" });
 hook({ hook_event_name: "UserPromptSubmit", prompt: "Add a greeting to notes.md. token sk-proj-abcdefghijklmnopqrstuvwxyz123456" });
 hook({ hook_event_name: "PreToolUse", tool_name: "apply_patch", tool_use_id: "c1", tool_input: { command: "*** Begin Patch\n*** Update File: notes.md\n+hi\n*** End Patch" } });
 hook({ hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_use_id: "c1", tool_input: { command: "…" }, tool_response: "Success" });
+// A recorded result whose output reports an error (live case: PowerShell ParserError) is not success.
+hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "c9", tool_input: { command: "Set-Content x" } });
+hook({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "c9", tool_input: { command: "Set-Content x" }, tool_response: "ParserError: \r\nLine | Missing closing ')'" });
 // A file written by a shell command names no file in any structured field (as Codex desktop does with PowerShell).
 writeFileSync(path.join(project, "shell-made.md"), "## Draft\nTODO: finish\n");
 hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "c2", tool_input: { command: "npm test" } });
@@ -60,7 +63,8 @@ assert.match(cp.observed.userMessages[0].text, /REDACTED:openai-key/);
 assert.ok(!JSON.stringify(cp).includes("abcdefghijklmnopqrstuvwxyz123456"), "secret leaked into checkpoint");
 assert.ok(!JSON.stringify(cp).includes("abcdef1234567890"), "secret from a touched file leaked into checkpoint");
 assert.equal(cp.observed.recentActions.find((a) => a.tool === "apply_patch").outcome, "result recorded");
-assert.match(cp.observed.recentActions.find((a) => a.tool === "Bash").outcome, /^UNKNOWN/, "missing result must not read as success");
+assert.match(cp.observed.recentActions.find((a) => a.input?.includes("npm test")).outcome, /^UNKNOWN/, "missing result must not read as success");
+assert.match(cp.observed.recentActions.find((a) => a.input?.includes("Set-Content x")).outcome, /reports an error/, "an error in the output must not read as success");
 assert.deepEqual(cp.observed.artifacts.map((f) => f.path).sort(), [".env", "notes.md", "shell-made.md"], "files written by shell commands are found on disk");
 assert.equal(cp.observed.artifacts.find((f) => f.path === ".env").now.contents, "credential file; not inspected");
 assert.equal(cp.observed.artifacts.find((f) => f.path === "shell-made.md").outcome, "observed on disk");
@@ -84,7 +88,7 @@ const missing = await client.callTool({ name: "get_checkpoint", arguments: {} })
 assert.ok(missing.isError && /session_ref/.test(missing.content[0].text), "no session given must be refused, never guessed");
 
 const page = JSON.parse(await call("get_events", { session_id: session, event: "PreToolUse" }));
-assert.equal(page.rows.length, 2);
+assert.equal(page.rows.length, 3);
 assert.equal(JSON.parse(await call("get_event", { session_id: session, seq: 4 })).response, "Success");
 
 assert.match(await call("read_project_file", { session_id: session, path: "notes.md" }), /API_KEY=\[REDACTED:secret-assignment\]/);
