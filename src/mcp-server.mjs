@@ -7,14 +7,13 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { SKIP_DIRS, buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
+import { SECRET_FILE, SKIP_DIRS, buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
 import { redactSecrets } from "./redact.mjs";
 import { assertSessionId, readEvents, resolveSession, storeRoot } from "./store.mjs";
 import { takeoverPrompt } from "./takeover.mjs";
 
 const MAX_RESPONSE_CHARS = 20_000;
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
-const SECRET_FILE = /(^|[\\/])(\.env(\..*)?|.*\.(pem|key|p12|pfx)|id_(rsa|ed25519|ecdsa)|auth\.json|\.npmrc|\.netrc)$/i;
 
 const reply = (value) => {
   let text = typeof value === "string" ? value : JSON.stringify(value, null, 1);

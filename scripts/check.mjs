@@ -34,6 +34,8 @@ hook({ hook_event_name: "SessionStart", source: "startup" });
 hook({ hook_event_name: "UserPromptSubmit", prompt: "Add a greeting to notes.md. token sk-proj-abcdefghijklmnopqrstuvwxyz123456" });
 hook({ hook_event_name: "PreToolUse", tool_name: "apply_patch", tool_use_id: "c1", tool_input: { command: "*** Begin Patch\n*** Update File: notes.md\n+hi\n*** End Patch" } });
 hook({ hook_event_name: "PostToolUse", tool_name: "apply_patch", tool_use_id: "c1", tool_input: { command: "…" }, tool_response: "Success" });
+// A file written by a shell command names no file in any structured field (as Codex desktop does with PowerShell).
+writeFileSync(path.join(project, "shell-made.md"), "## Draft\nTODO: finish\n");
 hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "c2", tool_input: { command: "npm test" } });
 // SIMULATED interruption: no PostToolUse and no Stop for c2.
 
@@ -59,9 +61,11 @@ assert.ok(!JSON.stringify(cp).includes("abcdefghijklmnopqrstuvwxyz123456"), "sec
 assert.ok(!JSON.stringify(cp).includes("abcdef1234567890"), "secret from a touched file leaked into checkpoint");
 assert.equal(cp.observed.recentActions.find((a) => a.tool === "apply_patch").outcome, "result recorded");
 assert.match(cp.observed.recentActions.find((a) => a.tool === "Bash").outcome, /^UNKNOWN/, "missing result must not read as success");
-assert.deepEqual(cp.observed.artifacts.map((f) => f.path), ["notes.md"]);
+assert.deepEqual(cp.observed.artifacts.map((f) => f.path).sort(), [".env", "notes.md", "shell-made.md"], "files written by shell commands are found on disk");
+assert.equal(cp.observed.artifacts.find((f) => f.path === ".env").now.contents, "credential file; not inspected");
+assert.equal(cp.observed.artifacts.find((f) => f.path === "shell-made.md").outcome, "observed on disk");
 assert.equal(cp.observed.artifacts[0].now.exists, true);
-assert.deepEqual(cp.inferred.remainingWork.map((r) => [r.file, r.under]), [["notes.md", "## Part 2"]], "unfinished marker found under its heading");
+assert.deepEqual(cp.inferred.remainingWork.map((r) => [r.file, r.under]).sort(), [["notes.md", "## Part 2"], ["shell-made.md", "## Draft"]], "unfinished marker found under its heading");
 assert.match(cp.inferred.nextStep, /notes\.md.*Part 2/);
 assert.equal(cp.agentNotes.finalMessages.length, 0);
 assert.ok(cp.missing.some((m) => /No final assistant message/.test(m)), "missing context is marked");

@@ -5,6 +5,7 @@ import { readEvents, listSessionIds, sessionRef } from "./store.mjs";
 import { readAgentMessages, readUsageSignals, sourceAppRunning } from "./source.mjs";
 
 export const SKIP_DIRS = new Set([".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"]);
+export const SECRET_FILE = /(^|[\\/])(\.env(\..*)?|.*\.(pem|key|p12|pfx)|id_(rsa|ed25519|ecdsa)|auth\.json|\.npmrc|\.netrc)$/i;
 const UNFINISHED = /\b(TODO|TBD|FIXME|XXX)\b|\[(?:unfinished|incomplete|to be written)\]/i;
 const MAX_SCAN = 2000;
 
@@ -45,6 +46,7 @@ const artifactState = (project, file, lastEventMs) => {
     if (rel.startsWith("..") || path.isAbsolute(rel)) return { exists: "outside project; not inspected" };
     const info = statSync(target);
     const state = { exists: true, relativePath: rel, bytes: info.size, modifiedAt: info.mtime.toISOString(), modifiedAfterLastEvent: info.mtimeMs > lastEventMs + 2000 };
+    if (SECRET_FILE.test(target)) return { ...state, contents: "credential file; not inspected" };
     if (info.size > 1_000_000) return state;
     let heading;
     const unfinished = [];
@@ -166,7 +168,20 @@ export const buildCheckpoint = (id) => {
   const prompts = events.filter((e) => e.event === "UserPromptSubmit");
   const actions = pairActions(events);
   const files = new Map();
-  for (const a of actions) for (const f of a.files) files.set(f.path, { path: f.path, change: f.change, outcome: a.outcome, seq: a.startedSeq ?? a.resultSeq });
+  for (const a of actions) for (const f of a.files) files.set(f.path.toLowerCase(), { path: f.path, change: f.change, outcome: a.outcome, seq: a.startedSeq ?? a.resultSeq });
+  // Codex desktop also writes files through shell commands (PowerShell Set-Content
+  // etc.), which name no file in a structured field. So also list every project file
+  // whose on-disk mtime falls inside the recorded session, whatever wrote it.
+  if (project) {
+    const firstMs = Date.parse(events[0].ts) - 2000;
+    for (const c of changedSince(project, firstMs).changed) {
+      if (Date.parse(c.modifiedAt) > lastMs + 2000) continue; // after the recording: reported as stale instead
+      const key = path.resolve(project, c.path).toLowerCase();
+      if (![...files.keys()].some((k) => path.resolve(project, k).toLowerCase() === key)) {
+        files.set(c.path.toLowerCase(), { path: c.path, change: "modified on disk during the session (writing tool not identified)", outcome: "observed on disk" });
+      }
+    }
+  }
   const artifacts = [...files.values()].slice(-30).map((f) => ({ ...f, now: project ? artifactState(project, f.path, lastMs) : { exists: "unknown" } }));
   const finalMessages = events.filter((e) => e.lastAssistantMessage).slice(-3);
   const transcript = events.findLast((e) => e.transcript)?.transcript;
