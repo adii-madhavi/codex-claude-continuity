@@ -43,7 +43,7 @@ function Focus([string]$proc) {
   if ([W]::IsIconic($h)) { [W]::ShowWindow($h, 9) | Out-Null }
   $fg = [W]::GetForegroundWindow()
   $a = [W]::GetWindowThreadProcessId($fg, [IntPtr]::Zero); $b = [W]::GetCurrentThreadId()
-  [W]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero) # Alt tap lifts the foreground lock
+  # No Alt tap: it opened Claude Desktop's File menu. AttachThreadInput is enough here.
   [W]::AttachThreadInput($b, $a, $true) | Out-Null
   [W]::BringWindowToTop($h) | Out-Null; [W]::SetForegroundWindow($h) | Out-Null
   [W]::AttachThreadInput($b, $a, $false) | Out-Null
