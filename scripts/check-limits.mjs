@@ -64,7 +64,7 @@ hook("01a16801-0000-7000-8000-000000000005", "truncated", "Stop");
 hook("01a16801-0000-7000-8000-000000000006", "resumed", "Stop");
 hook("01a16801-0000-7000-8000-000000000007", "limit-error", "UserPromptSubmit"); // not a turn end
 assert.equal(launches().length, 1, "only a turn end with limit_reached may launch");
-assert.match(launches()[0], /dry-run 01a16801-0000-7000-8000-000000000001 usage limit \(error event at /);
+assert.match(launches()[0], /dry-run 01a16801-0000-7000-8000-000000000001 via cowork\+folder usage limit \(error event at /, "an existing project folder is attached through the Cowork link");
 
 console.log("PASS limit detector:", JSON.stringify(results));
 console.log("PASS takeover launches: 1 for 2 identical Stop signals; 0 for prose, approaching, unknown, truncated, resumed, non-Stop");

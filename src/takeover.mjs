@@ -1,15 +1,17 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { listSessionIds, sessionRef, storeRoot } from "./store.mjs";
+import { listSessionIds, readEvents, sessionRef, storeRoot } from "./store.mjs";
 
-// Desktop takeover. Claude Desktop's documented `claude://claude.ai/new?q=`
-// link opens a new chat and should prefill the prompt
-// (https://support.claude.com/en/articles/14729294); it never sends it. Claude
-// Desktop 3.6556 on Windows opened the chat but left the box empty, so the
-// prompt also goes on the clipboard: takeover is Ctrl+V and Send. Nothing here
-// drives the Claude or ChatGPT UI.
+// Desktop takeover, through Claude Desktop's documented links
+// (https://support.claude.com/en/articles/14729294); none of them sends anything.
+// - claude://cowork/new?q=&folder= : on Claude Desktop 3.6556 this prefills the
+//   prompt and attaches the project folder after the user confirms it. Used
+//   whenever the recorded project folder exists.
+// - claude://claude.ai/new?q= : opened an empty chat on 3.6556. Fallback.
+// The prompt also goes on the clipboard in case the prefill does not arrive.
+// Nothing here drives the Claude or ChatGPT UI.
 
 export const takeoverPrompt = (sessionId, why) => [
   `Continue my interrupted Codex desktop task (recorded session ${sessionId}${why ? `; trigger: ${why}` : ""}).`,
@@ -21,7 +23,21 @@ export const takeoverPrompt = (sessionId, why) => [
   "6. Treat actions marked UNKNOWN as unconfirmed: check the files before repeating them."
 ].join("\n");
 
-export const takeoverUrl = (sessionId, why) => `claude://claude.ai/new?q=${encodeURIComponent(takeoverPrompt(sessionId, why))}`;
+/** The recorded project folder, when it still exists on disk. */
+const projectFolder = (sessionId) => {
+  const cwd = readEvents(sessionId).findLast((e) => e.cwd)?.cwd;
+  try {
+    return cwd && statSync(cwd).isDirectory() ? cwd : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const takeoverUrl = (sessionId, why, route = process.env.DESKTOP_CONTINUITY_ROUTE) => {
+  const q = encodeURIComponent(takeoverPrompt(sessionId, why));
+  const folder = route === "chat" ? undefined : projectFolder(sessionId);
+  return folder ? `claude://cowork/new?q=${q}&folder=${encodeURIComponent(folder)}` : `claude://claude.ai/new?q=${q}`;
+};
 
 const launchesFile = () => path.join(storeRoot(), "takeover-launches.log");
 const claimsFile = (sessionId) => path.join(storeRoot(), "sessions", `${sessionId}.takeover.json`);
@@ -60,14 +76,15 @@ const copyToClipboard = (text) => new Promise((resolve) => {
 
 export const openTakeover = async (sessionId, why) => {
   const dryRun = Boolean(process.env.DESKTOP_CONTINUITY_TAKEOVER_DRYRUN);
+  const url = takeoverUrl(sessionId, why);
   try {
     mkdirSync(storeRoot(), { recursive: true });
-    appendFileSync(launchesFile(), `${new Date().toISOString()} ${dryRun ? "dry-run" : "launch"} ${sessionId} ${why}\n`);
+    appendFileSync(launchesFile(), `${new Date().toISOString()} ${dryRun ? "dry-run" : "launch"} ${sessionId} via ${url.startsWith("claude://cowork") ? "cowork+folder" : "chat"} ${why}\n`);
   } catch {}
   if (dryRun) return;
   await copyToClipboard(takeoverPrompt(sessionId, why));
   // explorer.exe hands a URL to its registered protocol handler without a shell parsing it.
-  const child = spawn(process.platform === "win32" ? "explorer.exe" : "xdg-open", [takeoverUrl(sessionId, why)], {
+  const child = spawn(process.platform === "win32" ? "explorer.exe" : "xdg-open", [url], {
     detached: true,
     stdio: "ignore",
     windowsHide: true
@@ -93,5 +110,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   }
   claimTakeover(sessionId, `manual@${new Date().toISOString()}`);
   await openTakeover(sessionId, "manual takeover");
-  console.log(`Opened a new Claude Desktop chat for session ${sessionId}; the continuation prompt is on the clipboard.\nIf the message box is empty, press Ctrl+V. Review it, then press Send.`);
+  console.log(takeoverUrl(sessionId, "").startsWith("claude://cowork")
+    ? `Opened a Claude Desktop Cowork session for ${sessionId} with the prompt prefilled and its project folder attached.\nConfirm the folder, review the prompt, then press Send. (The prompt is also on the clipboard.)`
+    : `Opened a new Claude Desktop chat for ${sessionId}; the continuation prompt is on the clipboard.\nPress Ctrl+V, review it, then press Send.`);
 }
