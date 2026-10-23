@@ -28,6 +28,28 @@ export const assertSessionId = (id) => {
 
 const sessionFile = (id) => path.join(sessionsDir(), `${assertSessionId(id)}.jsonl`);
 
+/**
+ * A stable integer per session: the first 12 hex digits of its id (for Codex's
+ * UUIDv7 ids, the creation time in ms). Claude Desktop 3.6556's chat bridge
+ * delivered integer tool arguments but dropped the string session_id, so tools
+ * also accept this. Null when the id does not start with 12 hex digits.
+ */
+export const sessionRef = (id) => {
+  const hex = id.replace(/-/g, "").slice(0, 12);
+  return /^[0-9a-f]{12}$/i.test(hex) ? Number.parseInt(hex, 16) : null;
+};
+
+/** The one session named by session_id or session_ref; never a guess. */
+export const resolveSession = ({ session_id, session_ref } = {}) => {
+  if (typeof session_id === "string" && session_id) return assertSessionId(session_id);
+  if (Number.isSafeInteger(session_ref)) {
+    const matches = listSessionIds().filter(({ id }) => sessionRef(id) === session_ref);
+    if (matches.length === 1) return matches[0].id;
+    throw new Error(matches.length ? `session_ref ${session_ref} is ambiguous; pass session_id.` : `No recorded session has session_ref ${session_ref}.`);
+  }
+  throw new Error("Pass session_ref (an integer from list_sessions) or session_id.");
+};
+
 /** One write per event; the line is complete or (if the process dies mid-write) skipped by readers. */
 export const appendEvent = (event) => {
   mkdirSync(sessionsDir(), { recursive: true });

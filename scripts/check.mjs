@@ -21,7 +21,7 @@ mkdirSync(codexHome);
 const transcript = path.join(codexHome, "rollout-test.jsonl");
 writeFileSync(transcript, `${JSON.stringify({ timestamp: new Date().toISOString(), type: "event_msg", payload: { type: "token_count", rate_limits: { primary: { used_percent: 100, window_minutes: 300, resets_at: 1893456000 } } } })}\n`);
 const env = { ...process.env, DESKTOP_CONTINUITY_HOME: path.join(tmp, "store"), CODEX_HOME: codexHome, DESKTOP_CONTINUITY_NO_AUTO_TAKEOVER: "1" };
-const session = "01a1test-0000-7000-8000-000000000001";
+const session = "01a16700-0000-7000-8000-000000000001";
 const base = { session_id: session, transcript_path: transcript, cwd: project, model: "gpt-test", turn_id: "t1" };
 
 const hook = (payload) => {
@@ -64,6 +64,13 @@ assert.equal(cp.sourceStatus.usage.limitReached, true);
 
 assert.equal(JSON.parse(await call("get_checkpoint", { sessionId: session })).session_id, session, "sessionId alias");
 assert.match(readFileSync(path.join(tmp, "store", "mcp-calls.log"), "utf8"), /get_checkpoint args=\{"sessionId"/);
+// Claude Desktop's chat bridge dropped the string session_id but kept integers.
+const ref = sessions[0].session_ref;
+assert.ok(Number.isSafeInteger(ref));
+assert.equal(JSON.parse(await call("get_checkpoint", { session_ref: ref })).session_id, session, "session_ref");
+assert.match(await call("get_events", { session_ref: ref, after_seq: 0, limit: 2 }), /"rows"/);
+const missing = await client.callTool({ name: "get_checkpoint", arguments: {} });
+assert.ok(missing.isError && /session_ref/.test(missing.content[0].text), "no session given must be refused, never guessed");
 
 const page = JSON.parse(await call("get_events", { session_id: session, event: "PreToolUse" }));
 assert.equal(page.rows.length, 2);

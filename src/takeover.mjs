@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { listSessionIds } from "./store.mjs";
+import { listSessionIds, sessionRef } from "./store.mjs";
 
 // Desktop takeover. Claude Desktop's documented `claude://claude.ai/new?q=`
 // link opens a new chat and should prefill the prompt
@@ -11,8 +11,8 @@ import { listSessionIds } from "./store.mjs";
 
 export const takeoverPrompt = (sessionId, why) => [
   `Continue my interrupted Codex desktop task (recorded session ${sessionId}${why ? `; trigger: ${why}` : ""}).`,
-  `1. Call the desktop-continuity tool get_checkpoint with session_id "${sessionId}" and read it fully.`,
-  "2. Call get_source_status. If the source app may still be working on this task, stop and tell me instead of acting.",
+  `1. Call the desktop-continuity tool get_checkpoint with session_ref ${sessionRef(sessionId)} (an integer) and read it fully.`,
+  `2. Call get_source_status with the same session_ref. If the source app may still be working on this task, stop and tell me instead of acting.`,
   "3. Treat every action marked outcome unknown as not confirmed: inspect the files before repeating it.",
   "4. Fetch only the extra events or files you need, then tell me your plan before changing any shared file."
 ].join("\n");

@@ -1,4 +1,4 @@
-import { readEvents, listSessionIds } from "./store.mjs";
+import { readEvents, listSessionIds, sessionRef } from "./store.mjs";
 import { readUsageSignals, sourceAppRunning } from "./source.mjs";
 
 // Checkpoint construction: a compact, bounded summary of one recorded session,
@@ -82,6 +82,7 @@ export const sessionSummary = (id) => {
   const events = readEvents(id);
   const first = events.find((e) => e.event === "UserPromptSubmit");
   return {
+    session_ref: sessionRef(id),
     session_id: id,
     project: events.findLast((e) => e.cwd)?.cwd,
     firstRequest: clip(first?.prompt, 160),
@@ -100,6 +101,7 @@ export const buildCheckpoint = (id) => {
   for (const a of actions) for (const f of a.files) files.set(f.path, { path: f.path, change: f.change, outcome: a.outcome, seq: a.startedSeq ?? a.resultSeq });
   const lastReply = events.findLast((e) => e.lastAssistantMessage);
   return {
+    session_ref: sessionRef(id),
     session_id: id,
     source: "ChatGPT desktop app (Codex or local Work thread), captured by the desktop-continuity Codex plugin's hooks",
     project: events.findLast((e) => e.cwd)?.cwd,
