@@ -12,7 +12,8 @@ It is a separate project from `D:\keepitmovin`, which supervises terminal agents
 | Saved before the interruption | **Verified live**. The Interrupt event was on disk at the moment of Stop. |
 | Checkpoint built from the recording | **Verified** |
 | Claude Desktop discovers the MCP servers | **Verified**. Handshake, tools and prompts are listed in Claude's `mcp.log`. |
-| Claude Desktop calls the tools and continues | **Not verified.** In the first takeover the chat replied without any MCP call. |
+| Claude Desktop reads the checkpoint and checks the source | **Verified live** (see `mcp-calls.log` below). |
+| Claude continues the task | Pending: Claude's reply was not inspected. |
 | Codex-mode thread with file edits | Not exercised live. Covered by synthetic checks only. |
 | Automatic takeover on a usage limit | Not exercised. No limit was hit, and none was forced. |
 
@@ -86,9 +87,19 @@ Run `node scripts/check.mjs` for the synthetic self-check.
 - **Saved before the interruption.** `hook-runs.log` shows `ok SessionStart 05:42:35Z`, `ok UserPromptSubmit 05:42:36Z` and `ok Interrupt 05:43:03Z`. The session file has the prompt, the model, the project folder and the Interrupt. Codex's own transcript agrees: `turn_aborted`, reason `interrupted`, at 05:43:03Z.
 - **Checkpoint.** It reported state `interrupted`, no assistant output, no actions, and usage 2% (5-hour window) and 0% (weekly), so this was not a limit stop. That is why the automatic takeover correctly did not fire.
 - **Discovery.** Claude's `mcp.log` at 05:38:18Z shows `desktop-continuity` and `continuity-files` doing initialize, tools/list and prompts/list successfully.
-- **Takeover.** `src/takeover.mjs` opened Claude Desktop with the prefilled prompt, and you pressed Send. **Claude's `mcp.log` shows no `tools/call` afterwards**, so the chat did not read the checkpoint. Not yet verified.
+- **Takeover.** `src/takeover.mjs` opens a new Claude Desktop chat and puts the continuation prompt on the clipboard. You press Ctrl+V, then Send, then Allow for the tool calls.
+- **Retrieval.** The server's own `mcp-calls.log` recorded the Claude Desktop chat calling, in order, at 06:20:59–06:21:20Z:
+  - `get_checkpoint {"session_ref":1792734151626}`
+  - `get_source_status` with the same ref
+  - `get_events {"after_seq":0,"limit":10,...}`
+  - `list_project_files` on the project root, then on `outputs`, then on `work`
+
+  Claude saw that the turn was interrupted, the source was not still working, no limit was hit, and the project folders were empty, so nothing had been produced to repeat or avoid.
 
 ## Findings worth knowing
+
+- **Claude Desktop 3.6556's chat drops some tool arguments.** `get_checkpoint` with a required, described string `session_id` arrived as `{}`, while optional integers and an optional undescribed string (`dir`) arrived intact. These calls also do not appear in Claude's `mcp.log`: the chat reaches local servers through its VM and bridge. So every session tool also takes an optional integer `session_ref` (from `list_sessions`). A call naming no session is refused.
+- **`claude://claude.ai/new?q=` opened an empty chat** on this version; the documented prefill did not arrive. The takeover therefore also copies the prompt to the clipboard.
 
 - **Standalone hooks cannot record in the desktop app.** Hooks in `~/.codex/hooks.json` run inside Codex's Windows sandbox (`mxc`). Writing outside the workspace fails with `EPERM`, and the temp folder is blocked too. Plugin hooks get a writable `PLUGIN_DATA`, so capture ships as a plugin.
 - **The root `plugin.json` must contain only `name`.** With `$schema`, `version` or `description` in it, Codex 0.163 installed and enabled the plugin but silently loaded none of its hooks. The read-only `hooks/list` request to `codex app-server` showed this.
@@ -102,4 +113,4 @@ Run `node scripts/check.mjs` for the synthetic self-check.
 - Usage-limit detection reads an undocumented local transcript format and may break with app updates.
 - Claude Desktop chat can write only in folders configured for `continuity-files`, and cannot run commands or tests.
 - The automatic takeover's `explorer.exe` launch runs inside the hook's sandbox. It has not been verified to open Claude from there; the manual command does.
-- Takeover always needs one user action (Send). Claude Desktop documents no way to submit a message from outside.
+- Takeover needs you to press Ctrl+V and Send (plus Allow for each tool, unless you choose Always allow). Claude Desktop documents no way to submit a message from outside, and on this version the prefill link opened an empty chat.
