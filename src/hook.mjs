@@ -4,7 +4,8 @@
 // appends one redacted, size-bounded event and exits 0 with no output, which
 // Codex treats as "continue". It must never block or fail the source app.
 
-import { existsSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { sanitize } from "./redact.mjs";
 import { appendEvent, storeRoot } from "./store.mjs";
@@ -14,7 +15,20 @@ import { openTakeover } from "./takeover.mjs";
 const read = async () => {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  // A byte-order mark (PowerShell pipes add one) is not part of the JSON.
+  return JSON.parse(Buffer.concat(chunks).toString("utf8").replace(/^﻿/, ""));
+};
+
+// One line per run (no content), so a hook that runs but cannot record is
+// visible: the store's hook-runs.log, or the temp folder if the store is not writable.
+const logRun = (line) => {
+  for (const dir of [storeRoot(), os.tmpdir()]) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      appendFileSync(path.join(dir, dir === storeRoot() ? "hook-runs.log" : "desktop-continuity-hook-errors.log"), `${new Date().toISOString()} ${line}\n`);
+      return;
+    } catch {}
+  }
 };
 
 // Strings are redacted and truncated per field; objects keep their shape so a
@@ -56,14 +70,18 @@ const maybeAutoTakeover = (event) => {
   openTakeover(event.session, "usage limit reported in the local Codex transcript");
 };
 
+let event;
 try {
-  const event = toEvent(await read());
+  event = toEvent(await read());
   appendEvent(event);
+  logRun(`ok ${event.event} ${event.session}`);
   maybeAutoTakeover(event);
 } catch (error) {
   // Recording is best-effort; Codex must continue regardless.
+  const message = error instanceof Error ? error.message : String(error);
+  logRun(`error ${event?.event ?? "?"} ${event?.session ?? "?"} cwd=${process.cwd()} LOCALAPPDATA=${process.env.LOCALAPPDATA ?? "unset"}: ${message.slice(0, 300)}`);
   try {
-    process.stderr.write(`desktop-continuity hook: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.stderr.write(`desktop-continuity hook: ${message}\n`);
   } catch {}
 }
 process.exit(0);
