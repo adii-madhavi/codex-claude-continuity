@@ -23,11 +23,11 @@ Tested on 2026-10-23 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and 
    - Both interruptions were the user pressing Stop. In the glossary run Codex was told to pause, so Stop could land mid-task.
    - The limit-triggered takeover used `scripts/simulate-limit.mjs` with a sanitized transcript at the shape of a real limit seen on this machine. No real limit was hit or forced.
 4. **What remains manual**
-   - Starting the takeover: run `node src\takeover.mjs` (the automatic trigger does this itself on a classified limit).
-   - Pasting the prompt (Ctrl+V) and pressing Send.
+   - Starting the takeover: run `node src\takeover.mjs` (the automatic trigger does this itself on a classified limit). It opens a Cowork session with the prompt prefilled and the project folder attached.
+   - Confirming the folder and pressing Send.
    - Allowing the tool calls.
-   - Adding the project folder in the chat, unless it is already a `continuity-files` folder.
    - Replying OK before Claude's first edit.
+   - If the project folder no longer exists, the chat route is used instead: Ctrl+V and Add folder are needed too.
 5. **What cannot be recovered**
    - Hidden reasoning.
    - Text streamed but never completed as a message.
@@ -56,7 +56,7 @@ The destination is Claude Desktop's **Chat view**, not its Code tab (Claude Code
 | 2. Tool actions, results, changed files | **Yes.** Pre/PostToolUse input and result. Changed files come from patch headers and from on-disk timestamps inside the session, because Codex often writes files with PowerShell. | No | n/a |
 | 3. Progress after an abrupt stop | **Yes**, for anything saved. Each event is written when it fires. Text streamed but never completed is not saved anywhere locally. | No | n/a |
 | 4. Detect a usage limit | **Best-effort.** Structured transcript records only (undocumented format). | No | n/a |
-| 5. Start or submit a conversation | Prefill only (`codex://new?prompt=&path=`). | Prefill only | Opens a new chat. The documented `?q=` prefill arrived **empty** on this version, so the prompt goes on the clipboard. Nothing can press Send for you. |
+| 5. Start or submit a conversation | Prefill only (`codex://new?prompt=&path=`). | Prefill only | **Prefill only.** `claude://cowork/new?q=&folder=` prefilled the prompt and attached the folder after you confirmed it. `claude://claude.ai/new?q=` opened an **empty** chat on this version. Nothing can press Send for you. |
 | 6. Local MCP in Claude Desktop | n/a | n/a | **Yes, documented** ([local MCP](https://modelcontextprotocol.io/docs/develop/connect-local-servers)). |
 | 7. Files and tools to continue | n/a | n/a | Reads go through this server. Writes go through `continuity-files` (configured folders only), or through Claude Desktop's own **Add folder**. With an added folder, Claude Desktop runs commands in its sandboxed VM with only that folder mounted. That is how the glossary edits were made. |
 
@@ -76,7 +76,7 @@ ChatGPT desktop (Codex / local agent thread)
   └─ Codex plugin "desktop-continuity" ─ lifecycle hooks ─▶ src/hook.mjs            (capture)
         ~/.codex/plugins/data/desktop-continuity-personal/sessions/<thread>.jsonl      (storage)
 Claude Desktop ─ stdio MCP ─▶ src/mcp-server.mjs (read-only) ─▶ src/checkpoint.mjs  (checkpoint, on demand)
-src/takeover.mjs ─▶ prompt to clipboard + claude://claude.ai/new                    (takeover)
+src/takeover.mjs ─▶ claude://cowork/new?q=<prompt>&folder=<project> (+ clipboard)   (takeover)
 ```
 
 - **Capture** (`src/hook.mjs`) writes one redacted, size-bounded line per event, and exits 0 silently so it never blocks Codex. Hooks run inside Codex's sandbox, where only a plugin's `PLUGIN_DATA` folder is writable; that is why capture ships as a plugin.
@@ -103,13 +103,19 @@ src/takeover.mjs ─▶ prompt to clipboard + claude://claude.ai/new            
 
 ## Takeover: exact user actions
 
-1. **Start it.** Either the automatic trigger opens a new Claude Desktop chat on a classified limit, or you run `node D:\desktop-continuity\src\takeover.mjs`. Both put the prompt on the clipboard.
-2. **Paste and send.** In Claude Desktop's **Chat** view (not Code), press Ctrl+V, then Send.
-3. **Add the folder if needed.** If the project folder is not a `continuity-files` folder, click **Add folder** and choose it. Claude Desktop shows its own consent dialog.
-4. **Allow the tools.** Allow the desktop-continuity tool calls, or choose Always allow for these read-only tools.
-5. **Approve the plan.** Reply OK when Claude states the evidence that the source stopped and names the files it will change. Then approve its edits.
+1. **Start it.** Either the automatic trigger fires on a classified limit, or you run `node D:\desktop-continuity\src\takeover.mjs`. Both open a Claude Desktop **Cowork** session with the prompt prefilled and the thread's project folder attached. The prompt also goes on the clipboard.
+2. **Confirm and send.** Confirm the folder in Claude Desktop's dialog, review the prompt, and press **Send**.
+3. **Allow the tools.** Allow the desktop-continuity tool calls, or choose Always allow for these read-only tools.
+4. **Approve the plan.** Reply OK when Claude states the evidence that the source stopped and names the files it will change. Then approve its edits.
 
-Not yet verified: whether `continue_latest` appears in the chat's `/` menu, and whether the documented `claude://cowork/new?q=&folder=` link prefills and attaches the folder. If it works, it would remove steps 2 and 3.
+**Fallback.** If the project folder no longer exists, or you set `DESKTOP_CONTINUITY_ROUTE=chat`, a Chat-view conversation opens instead. Then press Ctrl+V, and click **Add folder** if the folder isn't a `continuity-files` folder.
+
+**Verified:**
+- The Cowork link prefills the prompt and attaches the folder.
+- A Cowork session called the desktop-continuity tools (`trigger-and-calls.txt`).
+- The glossary *edits* were made from a Chat-view session with an added folder.
+
+**Not tested:** edits from a Cowork session, and whether `continue_latest` appears in the `/` menu.
 
 ## Setup
 
@@ -200,7 +206,7 @@ A local Work thread ("make me a script for a horror show") was stopped after abo
 ## Findings worth knowing
 
 - **Claude Desktop 3.6556's chat bridge drops some tool arguments.** A required, described string `session_id` arrived as `{}`, while integers and an optional undescribed string (`dir`) arrived intact. Its local MCP calls also do not appear in Claude's `mcp.log`. The server's own `mcp-calls.log` records them.
-- **`claude://claude.ai/new?q=` opened an empty chat** on this version.
+- **`claude://claude.ai/new?q=` opened an empty chat** on this version, while **`claude://cowork/new?q=&folder=` prefilled the prompt and attached the folder**. Cowork sessions reach the local MCP servers configured in `claude_desktop_config.json`: the calls arrived. One help article says they don't.
 - **Standalone hooks cannot record in the desktop app.** They run in Codex's Windows sandbox and get `EPERM` outside the workspace. Plugin hooks get a writable `PLUGIN_DATA` folder.
 - **The root `plugin.json` must contain only `name`.** With extra fields, Codex installed the plugin but silently loaded none of its hooks.
 - **Codex desktop on Windows often writes files with PowerShell**, so file detection cannot rely on patch headers.
@@ -213,5 +219,5 @@ A local Work thread ("make me a script for a horror show") was stopped after abo
 - **Limit detection.** It depends on Codex's undocumented local transcript format. Automatic takeover on a real limit has not been observed.
 - **File detection by timestamp** can include files that something else changed during the session. They are labelled "writing tool not identified".
 - **Writes in Claude Desktop** need a folder you grant (Add folder) or a configured `continuity-files` folder. This project does not widen write access on its own.
-- **No full automation.** Takeover still needs paste, Send, tool approval and your OK. There are no desktop-automation tools in this environment, and no documented interface submits a Claude Desktop message.
+- **No full automation.** Takeover still needs a folder confirmation, Send, tool approval and your OK. There are no desktop-automation tools in this environment, and no documented interface submits a Claude Desktop message.
 - **Test scope.** Only one unfinished artifact, a Markdown file, was continued live. A desktop Codex task editing a multi-file code project has not been tested.

@@ -9,3 +9,12 @@
 2026-10-23T07:17:18.836Z get_checkpoint args={} paramKeys=name,arguments
 2026-10-23T07:17:19.426Z get_source_status args={} paramKeys=name,arguments
 2026-10-23T07:17:24.905Z list_sessions args={"limit":25} paramKeys=name,arguments
+
+# Cowork route (claude://cowork/new?q=&folder=, opened by src/takeover.mjs, launch 07:22:04Z): MCP calls from the Cowork session
+2026-10-23T07:24:18.268Z get_checkpoint args={"session_ref":1792739901440} paramKeys=name,arguments
+2026-10-23T07:24:18.879Z get_source_status args={"session_ref":1792739901440} paramKeys=name,arguments
+2026-10-23T07:24:24.999Z get_checkpoint args={} paramKeys=name,arguments
+2026-10-23T07:24:25.753Z get_source_status args={} paramKeys=name,arguments
+2026-10-23T07:24:31.834Z list_sessions args={"limit":25} paramKeys=name,arguments
+2026-10-23T07:24:37.375Z get_checkpoint args={"session_ref":1792739901440} paramKeys=name,arguments
+2026-10-23T07:24:37.945Z get_source_status args={"session_ref":1792739901440} paramKeys=name,arguments
