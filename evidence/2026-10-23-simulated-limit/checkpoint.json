@@ -1,0 +1,100 @@
+{
+ "session_ref": 1792739901440,
+ "session_id": "01a167a0-0000-7000-8000-5151a7ed0002",
+ "source": "ChatGPT desktop app (Codex or local Work thread), captured by the desktop-continuity Codex plugin's hooks",
+ "project": "D:\\desktop-continuity-demo",
+ "model": "simulated",
+ "recordedEvents": 4,
+ "firstRecordedAt": "2026-10-23T07:13:28.860Z",
+ "lastRecordedAt": "2026-10-23T07:13:29.069Z",
+ "observed": {
+  "note": "Recorded by hooks as it happened, or read from disk now.",
+  "userMessages": [
+   {
+    "seq": 2,
+    "at": "2026-10-23T07:13:28.917Z",
+    "text": "SIMULATED limit-trigger test. No real work was requested; do not edit any file."
+   }
+  ],
+  "artifacts": [],
+  "recentActions": [],
+  "unknownOutcomes": 0
+ },
+ "agentNotes": {
+  "note": "Written by the source agent. Its statements are claims, not verified facts.",
+  "finalMessages": [
+   {
+    "seq": 3,
+    "at": "2026-10-23T07:13:28.973Z",
+    "provenance": "Stop hook",
+    "text": "(simulated turn end)"
+   },
+   {
+    "seq": 4,
+    "at": "2026-10-23T07:13:29.069Z",
+    "provenance": "Stop hook",
+    "text": "(simulated turn end, repeated)"
+   }
+  ],
+  "transcriptMessages": []
+ },
+ "inferred": {
+  "note": "Derived by desktop-continuity from file contents, not recorded intent. Confirm before relying on it.",
+  "remainingWork": [],
+  "nextStep": "No unfinished markers found in touched files."
+ },
+ "sourceStatus": {
+  "checkedAt": "2026-10-23T07:19:04.665Z",
+  "chatgptAppRunning": true,
+  "lastRecordedEventAt": "2026-10-23T07:13:29.069Z",
+  "transcriptModifiedSecondsAgo": 1847,
+  "turn": {
+   "state": "turn ended",
+   "detail": "Codex reported the end of the turn (Stop hook). This does not prove the task is finished."
+  },
+  "usage": {
+   "available": true,
+   "note": "Read from Codex's local transcript (undocumented format). Best-effort; no_limit_signal does not prove the limit was not hit.",
+   "transcriptModifiedAt": "2026-10-23T06:48:17.427Z",
+   "recognizedRecords": 5,
+   "unparsedLines": 0,
+   "windows": [],
+   "rateLimitsObservedAt": "2026-10-23T09:00:24.275Z",
+   "lastTurnEnd": {
+    "at": "2026-10-23T09:00:24.287Z",
+    "type": "task_complete"
+   },
+   "status": "limit_reached",
+   "signal": {
+    "at": "2026-10-23T09:00:07.317Z",
+    "kind": "rate limit snapshot",
+    "detail": "a usage window at 100%",
+    "windows": [
+     {
+      "window": "primary",
+      "usedPercent": 100,
+      "windowMinutes": 300,
+      "resetsAt": "2026-10-20T20:06:19.000Z"
+     },
+     {
+      "window": "secondary",
+      "usedPercent": 31,
+      "windowMinutes": 10080,
+      "resetsAt": "2026-10-27T09:36:19.000Z"
+     }
+    ]
+   },
+   "signalCount": 1,
+   "limitReached": true
+  },
+  "projectChangedAfterLastEvent": [],
+  "mayStillBeWorking": false,
+  "advice": "No sign of ongoing work was observed. Still inspect files before repeating any action whose outcome is unknown."
+ },
+ "missing": [
+  "SIMULATED: this session contains events produced by a test trigger, not by Codex.",
+  "Hidden reasoning, unsaved editor state, and text streamed but never completed as a message.",
+  "ChatGPT Chat-mode conversations and cloud Work threads (hooks do not run there).",
+  "No completed assistant messages found in the transcript tail."
+ ]
+}

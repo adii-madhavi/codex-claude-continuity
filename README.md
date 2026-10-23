@@ -1,67 +1,115 @@
 # desktop-continuity
 
-This project records what the ChatGPT desktop app's Codex and local Work threads do while they work. Claude Desktop can then read a compact checkpoint, plus selected details, through a read-only MCP server and continue the task.
+This project records what the ChatGPT desktop app's Codex and local agent threads do while they work. When the source stops or hits its usage limit, Claude Desktop can read a compact checkpoint and selected details through a read-only MCP server, then continue the same work.
 
-It is a separate project from `D:\keepitmovin`, which supervises terminal agents in a PTY. None of that applies here. `src/redact.mjs` is adapted from keepitmovin under the MIT license (see `NOTICE`).
+It is a separate project from `D:\keepitmovin`, which supervises terminal agents in a PTY; that is not used here. `src/redact.mjs` is adapted from keepitmovin under the MIT license (see `NOTICE`).
 
-## Status (2026-10-23, Windows 11, ChatGPT desktop 26.1016, Claude Desktop 3.6556)
+Tested on 2026-10-23 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556.
 
-| Step | Status |
-|---|---|
-| Capture from a real ChatGPT desktop thread (local Work) | **Verified live** |
-| Saved before the interruption | **Verified live**. The Interrupt event was on disk at the moment of Stop. |
-| Checkpoint built from the recording | **Verified** |
-| Claude Desktop discovers the MCP servers | **Verified**. Handshake, tools and prompts are listed in Claude's `mcp.log`. |
-| Claude Desktop reads the checkpoint and checks the source | **Verified live** (see `mcp-calls.log` below). |
-| Claude continues the task | **Verified live.** It wrote the requested script and left the Codex project untouched. |
-| Codex-mode thread with file edits | Not exercised live. Covered by synthetic checks only. |
-| Automatic takeover on a usage limit | Not exercised. No limit was hit, and none was forced. |
+## Assessment against the original goal
+
+1. **What now works**
+   - Capture of local ChatGPT desktop agent threads, as each event happens.
+   - A checkpoint that keeps observed facts, agent notes and inferred remaining work apart, finds the files written so far, and marks unknown outcomes and stale state.
+   - Read-only MCP retrieval in Claude Desktop.
+   - A limit detector that classifies structured records only and answers "unknown" when it can't tell.
+   - At most one takeover chat per limit signal.
+2. **Demonstrated in the real desktop apps**
+   - ChatGPT saved a partial `glossary.md` (3 of 6 sections).
+   - Claude Desktop's chat read the checkpoint, the source status and one extra event through MCP, confirmed Codex had stopped, waited for the user's OK, and finished **the same file**. The finished sections are byte-identical (validator VALID).
+   - For the simulated trigger, Claude Desktop retrieved the checkpoint through MCP.
+   - The earlier horror-script run showed task transfer only.
+3. **What used simulation**
+   - Both interruptions were the user pressing Stop. In the glossary run Codex was told to pause, so Stop could land mid-task.
+   - The limit-triggered takeover used `scripts/simulate-limit.mjs` with a sanitized transcript at the shape of a real limit seen on this machine. No real limit was hit or forced.
+4. **What remains manual**
+   - Starting the takeover: run `node src\takeover.mjs` (the automatic trigger does this itself on a classified limit).
+   - Pasting the prompt (Ctrl+V) and pressing Send.
+   - Allowing the tool calls.
+   - Adding the project folder in the chat, unless it is already a `continuity-files` folder.
+   - Replying OK before Claude's first edit.
+5. **What cannot be recovered**
+   - Hidden reasoning.
+   - Text streamed but never completed as a message.
+   - Unsaved editor state.
+   - Chat-mode conversations and cloud agent threads, where hooks do not run.
+6. **Continue or recreate?** The system can now continue saved, unfinished work instead of recreating it. This was shown for one Markdown artifact in one run. Content that was never saved to disk can still only be recreated.
+
+## Supported desktop modes and exclusions
+
+On this PC, "ChatGPT desktop" and "Codex desktop" are **one app** (Store package `OpenAI.Codex`, shown as *ChatGPT*, with Chat, Work and Codex modes).
+
+| Source | Captured? | Why |
+|---|---|---|
+| Codex threads and local Work threads | **Yes** | Plugin lifecycle hooks run there ([hooks docs](https://learn.chatgpt.com/docs/hooks)). |
+| A Chat conversation handed to an agent | **Yes, as an agent thread** | The app starts a local agent thread in a folder it creates (`Documents\Codex\<date>\referenced-chatgpt-conversation-…`). Both glossary runs came in this way. |
+| Chat-mode conversations | **No** | No documented local or API access. The closest workflow is exporting or pasting the conversation into Claude yourself. |
+| Cloud Work threads | **No** | The docs say local hooks do not run with cloud orchestration. |
+
+The destination is Claude Desktop's **Chat view**, not its Code tab (Claude Code).
 
 ## Capability assessment
 
-On this PC, "ChatGPT desktop" and "Codex desktop" are **one installed app**. The Store package is `OpenAI.Codex`, it is shown as *ChatGPT*, and it has Chat, Work and Codex modes. Its data comes from separate sources depending on the mode.
-
-| Question | Codex threads and local Work threads | Chat mode and cloud Work | Claude Desktop |
+| Question | Codex and local agent threads | Chat mode and cloud Work | Claude Desktop |
 |---|---|---|---|
-| 1. Read messages as they happen | **Partly, documented** (lifecycle hooks): the user prompt, and the final reply of a completed turn | **No.** There is no documented local or API access, so export or paste is the only route. | n/a |
-| 2. Tool actions, results, changed files | **Yes** (PreToolUse/PostToolUse input and result; files from patch headers) | No | n/a |
-| 3. Progress after an abrupt stop | **Yes.** Each event is written when it fires. Text streamed before Stop is **not** saved anywhere locally. | No | n/a |
-| 4. Detect a usage limit | **Best-effort.** Usage-window percentages come from Codex's local transcript, which the docs call "not a stable interface". | No | n/a |
-| 5. Start or submit a conversation | Prefill only (`codex://new?prompt=`) | Prefill only | **Prefill only** (`claude://claude.ai/new?q=`). The user presses Send. |
-| 6. Local MCP in Claude Desktop | n/a | n/a | **Yes, documented** (stdio, `claude_desktop_config.json`) |
-| 7. Files and tools to continue | n/a | n/a | Read through this server. Write through the official filesystem server, **only for configured folders**. **No shell.** |
+| 1. Read messages as they happen | **Partly, documented.** Hooks deliver user prompts and the final reply of a completed turn. Completed interim agent messages come from the transcript, which is undocumented. | No | n/a |
+| 2. Tool actions, results, changed files | **Yes.** Pre/PostToolUse input and result. Changed files come from patch headers and from on-disk timestamps inside the session, because Codex often writes files with PowerShell. | No | n/a |
+| 3. Progress after an abrupt stop | **Yes**, for anything saved. Each event is written when it fires. Text streamed but never completed is not saved anywhere locally. | No | n/a |
+| 4. Detect a usage limit | **Best-effort.** Structured transcript records only (undocumented format). | No | n/a |
+| 5. Start or submit a conversation | Prefill only (`codex://new?prompt=&path=`). | Prefill only | Opens a new chat. The documented `?q=` prefill arrived **empty** on this version, so the prompt goes on the clipboard. Nothing can press Send for you. |
+| 6. Local MCP in Claude Desktop | n/a | n/a | **Yes, documented** ([local MCP](https://modelcontextprotocol.io/docs/develop/connect-local-servers)). |
+| 7. Files and tools to continue | n/a | n/a | Reads go through this server. Writes go through `continuity-files` (configured folders only), or through Claude Desktop's own **Add folder**. With an added folder, Claude Desktop runs commands in its sandboxed VM with only that folder mounted. That is how the glossary edits were made. |
 
-Sources:
-- [Codex hooks](https://learn.chatgpt.com/docs/hooks)
+Other sources:
 - [Projects and chats](https://learn.chatgpt.com/docs/projects)
 - [Use ChatGPT](https://learn.chatgpt.com/docs/use-chatgpt)
 - [Windows sandbox](https://learn.chatgpt.com/docs/windows/windows-sandbox)
 - [Package a plugin](https://developers.openai.com/plugins/build/plugins)
 - [Claude Desktop deep links](https://support.claude.com/en/articles/14729294-open-claude-desktop-with-a-link)
-- [Claude Desktop local MCP](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
 
-No cookies, tokens or account endpoints are used. Everything read is local data the apps write for the user.
+No cookies, tokens or account endpoints are used, and no approval control is bypassed.
 
 ## Architecture
 
 ```
-ChatGPT desktop (Codex / local Work thread)
-  └─ Codex plugin "desktop-continuity" ─ lifecycle hooks ─▶ src/hook.mjs   (capture)
-        writes ~/.codex/plugins/data/desktop-continuity-personal/sessions/<thread>.jsonl  (storage)
-Claude Desktop ─ stdio MCP ─▶ src/mcp-server.mjs (read-only) ─▶ src/checkpoint.mjs (checkpoint, on demand)
-src/takeover.mjs ─▶ claude://claude.ai/new?q=<continuation prompt>   (takeover: prefill, user sends)
+ChatGPT desktop (Codex / local agent thread)
+  └─ Codex plugin "desktop-continuity" ─ lifecycle hooks ─▶ src/hook.mjs            (capture)
+        ~/.codex/plugins/data/desktop-continuity-personal/sessions/<thread>.jsonl      (storage)
+Claude Desktop ─ stdio MCP ─▶ src/mcp-server.mjs (read-only) ─▶ src/checkpoint.mjs  (checkpoint, on demand)
+src/takeover.mjs ─▶ prompt to clipboard + claude://claude.ai/new                    (takeover)
 ```
 
-- **Capture** (`src/hook.mjs`) handles SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PreCompact, Stop, Interrupt and SessionEnd. It writes one redacted, size-bounded line per event and always exits 0 with no output, so it never blocks Codex.
-- **Storage** (`src/store.mjs`) is one append-only file per thread. Readers skip torn lines. Each thread keeps its own project folder.
-- **Checkpoint** (`src/checkpoint.mjs`) contains the request, the last reply, files touched, and recent actions. An action with no recorded result is marked **UNKNOWN: verify before repeating**, never treated as success. It also carries the source status and a list of what was not captured.
-- **MCP** (`src/mcp-server.mjs`) offers `list_sessions`, `get_checkpoint`, `get_source_status`, `get_events` (paged), `get_event`, `list_project_files` and `read_project_file`. It also has the `continue_task` prompt.
-  - Every tool is read-only and limited to the thread's recorded project.
-  - Credential files are refused and secrets are redacted.
-  - Responses are capped at 20,000 characters.
-  - It cannot write files, run commands or control any app.
-- **Takeover** is automatic when a turn ends while the transcript shows a usage window at 100%. Otherwise run `node D:\desktop-continuity\src\takeover.mjs [thread-id]`, or use the `continue_task` prompt. Claude Desktop only prefills; you press Send.
-- **Before acting**, the prompt tells Claude to call `get_source_status`. That checks whether the turn ended, whether ChatGPT is running, and how recently the transcript was written. If the source may still be working, Claude must stop and ask.
+- **Capture** (`src/hook.mjs`) writes one redacted, size-bounded line per event, and exits 0 silently so it never blocks Codex. Hooks run inside Codex's sandbox, where only a plugin's `PLUGIN_DATA` folder is writable; that is why capture ships as a plugin.
+- **Checkpoint** (`src/checkpoint.mjs`) is read first. It has four parts:
+  - `observed`: every user message in order, the touched files with their current on-disk state (size, time, unfinished markers under their headings), recent actions, and the count of actions with no recorded result (**UNKNOWN**, never counted as success).
+  - `agentNotes`: final messages from the Stop hook, plus completed transcript messages. Each is labelled with where it came from and treated as a claim, not a fact.
+  - `inferred`: remaining work found from unfinished markers, and a next step. These are derived, not recorded intent.
+  - `missing`: what is absent, stale (files changed after the last recorded event) or simulated.
+- **Source status** (`get_source_status`) combines:
+  - the end-of-turn events (Stop, Interrupt, SessionEnd);
+  - whether ChatGPT is running and how recently the transcript changed;
+  - the limit classification;
+  - project files changed after the last event. A recent change means the source may still be working.
+- **MCP tools** (all read-only): `list_sessions`, `get_checkpoint`, `get_source_status`, `get_events` (paged), `get_event`, `list_project_files`, `read_project_file`.
+  - Prompts: `continue_task` and `continue_latest` (no arguments).
+  - Scope: limited to the thread's recorded project. Credential files are never read, and responses are capped at 20,000 characters.
+  - Session argument: each tool takes an integer `session_ref`, because Claude Desktop's chat bridge drops the string `session_id`. A call naming no session is refused.
+- **Limit detector** (`classifyLimit` in `src/source.mjs`) returns `limit_reached`, `approaching`, `no_limit_signal` or `unknown`. It reads structured records only: an `error` event with a limit `codex_error_info` or "You've hit your usage limit", a non-null `rate_limit_reached_type`, or a window at `used_percent` 100. Prose is ignored. Unfamiliar shapes and a truncated newest record give `unknown`. A later window below 100%, or a new turn, clears the limit.
+- **Takeover** (`src/takeover.mjs`):
+  - Automatic: on a Stop whose transcript classifies as `limit_reached`, once per signal.
+  - Manual: `node src\takeover.mjs [thread]`, which refuses to open a second chat for the same thread without `--again`.
+  - The prompt tells Claude to read the checkpoint first, not re-ask what is recorded, continue the same files, and state the evidence that the source stopped and wait for OK before its first edit.
+  - Launches are logged in `takeover-launches.log`.
+
+## Takeover: exact user actions
+
+1. **Start it.** Either the automatic trigger opens a new Claude Desktop chat on a classified limit, or you run `node D:\desktop-continuity\src\takeover.mjs`. Both put the prompt on the clipboard.
+2. **Paste and send.** In Claude Desktop's **Chat** view (not Code), press Ctrl+V, then Send.
+3. **Add the folder if needed.** If the project folder is not a `continuity-files` folder, click **Add folder** and choose it. Claude Desktop shows its own consent dialog.
+4. **Allow the tools.** Allow the desktop-continuity tool calls, or choose Always allow for these read-only tools.
+5. **Approve the plan.** Reply OK when Claude states the evidence that the source stopped and names the files it will change. Then approve its edits.
+
+Not yet verified: whether `continue_latest` appears in the chat's `/` menu, and whether the documented `claude://cowork/new?q=&folder=` link prefills and attaches the folder. If it works, it would remove steps 2 and 3.
 
 ## Setup
 
@@ -76,43 +124,94 @@ The installer backs up every file it changes and keeps all other settings:
 - It adds `desktop-continuity` and, if you pass `--writable-folder`, `continuity-files` to Claude Desktop's config. On this MSIX install that is `%LOCALAPPDATA%\Claude-Data\claude_pzs8sxrjxfjjc\claude_desktop_config.json`.
 
 Then:
-1. Restart ChatGPT. Install **Desktop continuity** from *Personal plugins* and **trust its 8 hooks**.
-2. Quit Claude Desktop from the tray and reopen it.
+1. Restart ChatGPT, install **Desktop continuity** from *Personal plugins*, and trust its 8 hooks.
+2. Fully quit Claude Desktop from the tray and reopen it. Do this again after any change to `src/` that the MCP server uses.
 
-Run `node scripts/check.mjs` for the synthetic self-check.
+Checks (no AI tool is used):
+- `node scripts/check.mjs`: capture, redaction, artifacts, stale detection, MCP tools and prompts.
+- `node scripts/check-limits.mjs`: limit fixtures and one launch per signal.
+- `node scripts/validate-continuation.mjs <before> <after>`: whether a continued artifact kept its finished sections and completed the rest.
 
-## Verification evidence (live, 2026-10-23)
+## Evidence
 
-- **Source.** A new local Work thread `01a16748-43ca-7503-9d18-f0061fe976ad` with the prompt "make me a script for a horror show". You pressed Stop after about 10 seconds; that was a **simulated interruption**.
-- **Saved before the interruption.** `hook-runs.log` shows `ok SessionStart 05:42:35Z`, `ok UserPromptSubmit 05:42:36Z` and `ok Interrupt 05:43:03Z`. The session file has the prompt, the model, the project folder and the Interrupt. Codex's own transcript agrees: `turn_aborted`, reason `interrupted`, at 05:43:03Z.
-- **Checkpoint.** It reported state `interrupted`, no assistant output, no actions, and usage 2% (5-hour window) and 0% (weekly), so this was not a limit stop. That is why the automatic takeover correctly did not fire.
-- **Discovery.** Claude's `mcp.log` at 05:38:18Z shows `desktop-continuity` and `continuity-files` doing initialize, tools/list and prompts/list successfully.
-- **Takeover.** `src/takeover.mjs` opens a new Claude Desktop chat and puts the continuation prompt on the clipboard. You press Ctrl+V, then Send, then Allow for the tool calls.
-- **Retrieval.** The server's own `mcp-calls.log` recorded the Claude Desktop chat calling, in order, at 06:20:59–06:21:20Z:
-  - `get_checkpoint {"session_ref":1792734151626}`
-  - `get_source_status` with the same ref
-  - `get_events {"after_seq":0,"limit":10,...}`
-  - `list_project_files` on the project root, then on `outputs`, then on `work`
+### Continuing an unfinished artifact (`evidence/2026-10-23-glossary/`)
 
-  Claude saw that the turn was interrupted, the source was not still working, no limit was hit, and the project folders were empty, so nothing had been produced to repeat or avoid.
-- **Continuation.** Claude asked three scoping questions: format (short film), flavor (supernatural), destination (editable doc). It then wrote "What the House Keeps", a 15-scene supernatural short of about 12 minutes, as a Claude Docs document. It reported that it did not touch the original Codex project folder.
-  - Codex's partial draft from before the Stop was never saved locally, so Claude started the script fresh from the recorded request. It did not pick up the half-written text.
+1. **The source.** A ChatGPT desktop agent thread (`01a1678a…`, started from a Chat conversation) wrote `glossary.md` with the PowerShell tool:
+   - a six-section skeleton of TODOs;
+   - Latency, Throughput and Idempotency filled in, one edit each.
+2. **The interruption (simulated).** The prompt told Codex to run `Start-Sleep 180` at that point. You pressed Stop during the pause, at 06:56:55Z, before any final handover.
+3. **Before snapshot** (`before.md`). 1050 bytes, SHA-256 `6626e426…`, last written at 06:55:56Z.
+   - The hooks recorded 28 events, and the sleep call has no result (UNKNOWN).
+   - No project file changed after the last event, so the source had stopped modifying the project.
+4. **Checkpoint** (`checkpoint-before-takeover.json`). It found `glossary.md` from its on-disk timestamp, listed the three TODO sections as remaining work, and included two completed Codex messages labelled by source.
+5. **Claude Desktop chat** (`destination-calls.txt`):
+   - 07:03:10–19Z: called `get_checkpoint`, `get_source_status`, and `get_event seq 2` (the full prompt, which the checkpoint had cut off).
+   - It stated the evidence that Codex stopped, said it would change only `glossary.md` and would not re-run the interrupted pause, and waited for OK.
+   - After OK, it made three writes (12:40:51, :55 and :59 local) through its VM, with only that folder mounted read-write.
+6. **After** (`after.md`, `before-after.diff`, `validation.txt`):
+   - Same file, now 2096 bytes, SHA-256 `f6ffc7ab…`.
+   - The diff replaces exactly the three TODO lines and changes nothing else; no other files were created.
+   - The validator reports **VALID**: the 3 finished sections are byte-identical, and the 3 unfinished sections are completed.
+
+Before this run, the checkpoint found no files that Codex wrote with PowerShell. It now also lists files whose on-disk timestamps fall inside the session (commit `2f5518a`).
+
+### Limit-triggered takeover (`evidence/2026-10-23-simulated-limit/`)
+
+- **Detector checks** (`scripts/check-limits.mjs`, 9 sanitized fixtures):
+
+  | Fixture | Result |
+  |---|---|
+  | Recognized limit error | `limit_reached` |
+  | Prose about limits | `no_limit_signal` |
+  | 92% warning | `approaching` |
+  | Unfamiliar format | `unknown` |
+  | Truncated newest record | `unknown` |
+  | Repeated signal | `limit_reached`, signal count 3 |
+  | Resumed after a limit | `no_limit_signal` |
+  | Real 100%-window shape | `limit_reached` |
+  | Window reset | `no_limit_signal` |
+
+  Run through the real hook in dry-run mode, two identical Stops produce one launch. Prose, approaching, unknown, truncated, resumed and non-Stop events produce none.
+- **Real history.** Across all 55 Codex transcripts on this PC (221 MB), 54 classify as `no_limit_signal` and 1 as `limit_reached`. That one is a **real** limit: on 2026-10-20 at 17:37Z, Codex wrote `used_percent: 100` for the 5-hour window, with `rate_limit_reached_type: null` and no error record, and the turn still ended normally. No false positives were found.
+- **Simulated trigger with the real apps** (`trigger-and-calls.txt`):
+  - `scripts/simulate-limit.mjs` fed the real hook a session marked `simulated`. Each simulated session launched exactly once, even though each got two Stops.
+  - The first run exposed a bug: the hook exited before the clipboard copy finished. That run's launch therefore did not copy the prompt. Fixed in `3fdfeeb`.
+  - Claude Desktop's chat then called `get_checkpoint` and `get_source_status` for the simulated session, which reported `limit_reached`, and changed no files.
+- **What is still unverified.** Whether Codex fires the Stop hook for a turn that ends because of a real limit, and whether the automatic launch works from inside Codex's sandbox. The simulation ran the hook outside the sandbox.
+
+### Efficiency (`evidence/2026-10-23-glossary/payload-sizes.json`)
+
+| What | Bytes |
+|---|---|
+| Claude's MCP retrieval for the glossary takeover: checkpoint 11,177 + source status 1,331 + one event 2,709 | **15,217** |
+| Our recorded timeline | 25,907 |
+| Codex's full local transcript of that thread | 305,809 (about 20× the retrieval) |
+
+Most of the transcript is Codex's system and skill instructions, not conversation. Claude also read the 1 KB artifact itself. These are bytes, re-measured with the current code; **token usage was not measured**.
+
+On repeated questions:
+- The glossary takeover asked only one question, about re-running the interrupted pause (an UNKNOWN action). It fetched the truncated prompt instead of asking.
+- The three questions in the earlier horror-script run were necessary: the recorded request ("make me a script for a horror show") said nothing about format, style or destination.
+
+### Earlier: task transfer without a saved artifact
+
+A local Work thread ("make me a script for a horror show") was stopped after about 10 seconds. Claude Desktop read its checkpoint and wrote a new script as a Claude document. Codex's partial draft had never been saved, so this showed task transfer, not continuation.
 
 ## Findings worth knowing
 
-- **Claude Desktop 3.6556's chat drops some tool arguments.** `get_checkpoint` with a required, described string `session_id` arrived as `{}`, while optional integers and an optional undescribed string (`dir`) arrived intact. These calls also do not appear in Claude's `mcp.log`: the chat reaches local servers through its VM and bridge. So every session tool also takes an optional integer `session_ref` (from `list_sessions`). A call naming no session is refused.
-- **`claude://claude.ai/new?q=` opened an empty chat** on this version; the documented prefill did not arrive. The takeover therefore also copies the prompt to the clipboard.
-
-- **Standalone hooks cannot record in the desktop app.** Hooks in `~/.codex/hooks.json` run inside Codex's Windows sandbox (`mxc`). Writing outside the workspace fails with `EPERM`, and the temp folder is blocked too. Plugin hooks get a writable `PLUGIN_DATA`, so capture ships as a plugin.
-- **The root `plugin.json` must contain only `name`.** With `$schema`, `version` or `description` in it, Codex 0.163 installed and enabled the plugin but silently loaded none of its hooks. The read-only `hooks/list` request to `codex app-server` showed this.
-- **The hook strips a UTF-8 byte-order mark** from its input, which a PowerShell pipe adds.
-- **Streamed text that never finished as a message is not saved anywhere local.** This includes a half-written Writing canvas. After a Stop, only the request and the interruption can be recovered.
+- **Claude Desktop 3.6556's chat bridge drops some tool arguments.** A required, described string `session_id` arrived as `{}`, while integers and an optional undescribed string (`dir`) arrived intact. Its local MCP calls also do not appear in Claude's `mcp.log`. The server's own `mcp-calls.log` records them.
+- **`claude://claude.ai/new?q=` opened an empty chat** on this version.
+- **Standalone hooks cannot record in the desktop app.** They run in Codex's Windows sandbox and get `EPERM` outside the workspace. Plugin hooks get a writable `PLUGIN_DATA` folder.
+- **The root `plugin.json` must contain only `name`.** With extra fields, Codex installed the plugin but silently loaded none of its hooks.
+- **Codex desktop on Windows often writes files with PowerShell**, so file detection cannot rely on patch headers.
+- **A Chat conversation handed to an agent runs in an app-created folder**, not the folder you picked. The destination needs that folder granted, through **Add folder** or `continuity-files`.
 
 ## Limitations
 
-- Chat mode and cloud Work threads are not captured. The closest supported workflow is an explicit export or paste into Claude. This project builds no UI that implies otherwise.
-- Hooks see only the final assistant message of a completed turn, not messages between tool calls or hidden reasoning.
-- Usage-limit detection reads an undocumented local transcript format and may break with app updates.
-- Claude Desktop chat can write only in folders configured for `continuity-files`, and cannot run commands or tests.
-- The automatic takeover's `explorer.exe` launch runs inside the hook's sandbox. It has not been verified to open Claude from there; the manual command does.
-- Takeover needs you to press Ctrl+V and Send (plus Allow for each tool, unless you choose Always allow). Claude Desktop documents no way to submit a message from outside, and on this version the prefill link opened an empty chat.
+- **Capture coverage.** Chat mode and cloud Work threads are not captured.
+- **Message coverage.** Hooks see only the final assistant message of a completed turn. Interim messages come from the undocumented transcript, completed messages only. Hidden reasoning and streamed-but-unfinished text are never available.
+- **Limit detection.** It depends on Codex's undocumented local transcript format. Automatic takeover on a real limit has not been observed.
+- **File detection by timestamp** can include files that something else changed during the session. They are labelled "writing tool not identified".
+- **Writes in Claude Desktop** need a folder you grant (Add folder) or a configured `continuity-files` folder. This project does not widen write access on its own.
+- **No full automation.** Takeover still needs paste, Send, tool approval and your OK. There are no desktop-automation tools in this environment, and no documented interface submits a Claude Desktop message.
+- **Test scope.** Only one unfinished artifact, a Markdown file, was continued live. A desktop Codex task editing a multi-file code project has not been tested.

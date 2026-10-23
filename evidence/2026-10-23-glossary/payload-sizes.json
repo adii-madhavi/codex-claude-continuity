@@ -1,0 +1,12 @@
+{
+ "parts": {
+  "get_checkpoint": 11177,
+  "get_source_status": 1331,
+  "get_event(2)": 2709
+ },
+ "retrievedBytes": 15217,
+ "recordedTimelineBytes": 25907,
+ "codexTranscriptBytes": 305809,
+ "ratioTranscriptToRetrieved": 20.1,
+ "artifactBytes": 1050
+}

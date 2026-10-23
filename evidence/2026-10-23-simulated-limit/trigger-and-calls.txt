@@ -1,0 +1,11 @@
+# SIMULATED limit trigger (scripts/simulate-limit.mjs). Transcript fixture: scripts/fixtures/limits/window-full.jsonl
+# takeover-launches.log (simulated sessions only)
+2026-10-23T07:12:36.458Z launch 01a167a0-0000-7000-8000-5151a7ed0001 SIMULATED usage limit (rate limit snapshot at 2026-10-23T09:00:07.317Z)
+2026-10-23T07:13:28.978Z launch 01a167a0-0000-7000-8000-5151a7ed0002 SIMULATED usage limit (rate limit snapshot at 2026-10-23T09:00:07.317Z)
+
+# desktop-continuity MCP calls from the Claude Desktop chat
+2026-10-23T07:17:13.942Z get_checkpoint args={"session_ref":1792739901440} paramKeys=name,arguments
+2026-10-23T07:17:14.527Z get_source_status args={"session_ref":1792739901440} paramKeys=name,arguments
+2026-10-23T07:17:18.836Z get_checkpoint args={} paramKeys=name,arguments
+2026-10-23T07:17:19.426Z get_source_status args={} paramKeys=name,arguments
+2026-10-23T07:17:24.905Z list_sessions args={"limit":25} paramKeys=name,arguments
