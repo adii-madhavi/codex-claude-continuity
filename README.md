@@ -13,7 +13,7 @@ It is a separate project from `D:\keepitmovin`, which supervises terminal agents
 | Checkpoint built from the recording | **Verified** |
 | Claude Desktop discovers the MCP servers | **Verified**. Handshake, tools and prompts are listed in Claude's `mcp.log`. |
 | Claude Desktop reads the checkpoint and checks the source | **Verified live** (see `mcp-calls.log` below). |
-| Claude continues the task | Pending: Claude's reply was not inspected. |
+| Claude continues the task | **Verified live.** It wrote the requested script and left the Codex project untouched. |
 | Codex-mode thread with file edits | Not exercised live. Covered by synthetic checks only. |
 | Automatic takeover on a usage limit | Not exercised. No limit was hit, and none was forced. |
 
@@ -95,6 +95,9 @@ Run `node scripts/check.mjs` for the synthetic self-check.
   - `list_project_files` on the project root, then on `outputs`, then on `work`
 
   Claude saw that the turn was interrupted, the source was not still working, no limit was hit, and the project folders were empty, so nothing had been produced to repeat or avoid.
+- **Continuation.** Claude asked three scoping questions: format (short film), flavor (supernatural), destination (editable doc). It then wrote "What the House Keeps", a 15-scene supernatural short of about 12 minutes, as a Claude Docs document. It reported that it did not touch the original Codex project folder.
+  - Codex's partial draft from before the Stop was never saved locally, so Claude started the script fresh from the recorded request. It did not pick up the half-written text.
+  - Claude itself shows an "Opus 5.5" model label; I didn't check which model the chat used.
 
 ## Findings worth knowing
 
