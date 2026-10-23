@@ -1,5 +1,62 @@
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import path from "node:path";
+import { redactSecrets } from "./redact.mjs";
 import { readEvents, listSessionIds, sessionRef } from "./store.mjs";
-import { readUsageSignals, sourceAppRunning } from "./source.mjs";
+import { readAgentMessages, readUsageSignals, sourceAppRunning } from "./source.mjs";
+
+export const SKIP_DIRS = new Set([".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"]);
+const UNFINISHED = /\b(TODO|TBD|FIXME|XXX)\b|\[(?:unfinished|incomplete|to be written)\]/i;
+const MAX_SCAN = 2000;
+
+/** Files under root modified after `sinceMs` (bounded walk, skips dependency folders). */
+const changedSince = (root, sinceMs) => {
+  const changed = [];
+  let seen = 0;
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const d of entries) {
+      if (++seen > MAX_SCAN || changed.length >= 20) return;
+      const full = path.join(dir, d.name);
+      if (d.isDirectory()) {
+        if (!SKIP_DIRS.has(d.name)) walk(full);
+      } else {
+        try {
+          const m = statSync(full).mtimeMs;
+          if (m > sinceMs) changed.push({ path: path.relative(root, full), modifiedAt: new Date(m).toISOString() });
+        } catch {}
+      }
+    }
+  };
+  walk(root);
+  return { changed, truncated: seen > MAX_SCAN };
+};
+
+/** Current on-disk state of a touched file, read only when it resolves inside the project. */
+const artifactState = (project, file, lastEventMs) => {
+  try {
+    const root = realpathSync(project);
+    const target = realpathSync(path.resolve(root, file));
+    const rel = path.relative(root, target);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return { exists: "outside project; not inspected" };
+    const info = statSync(target);
+    const state = { exists: true, relativePath: rel, bytes: info.size, modifiedAt: info.mtime.toISOString(), modifiedAfterLastEvent: info.mtimeMs > lastEventMs + 2000 };
+    if (info.size > 1_000_000) return state;
+    let heading;
+    const unfinished = [];
+    readFileSync(target, "utf8").split(/\r?\n/).forEach((line, i) => {
+      if (/^#{1,6}\s/.test(line)) heading = line.trim();
+      if (UNFINISHED.test(line) && unfinished.length < 15) unfinished.push({ line: i + 1, under: heading, text: redactSecrets(line.trim()).slice(0, 160) });
+    });
+    return { ...state, unfinished };
+  } catch {
+    return { exists: false };
+  }
+};
 
 // Checkpoint construction: a compact, bounded summary of one recorded session,
 // built on demand from the timeline. It reports what was observed and labels
@@ -62,8 +119,14 @@ export const sourceStatus = (events) => {
   const running = sourceAppRunning();
   const modifiedAgoSec = usage.transcriptModifiedAt ? Math.round((Date.now() - Date.parse(usage.transcriptModifiedAt)) / 1000) : undefined;
   const status = turnStatus(events);
-  const mayStillBeWorking = running !== false && status.state === "no end of turn recorded" && !usage.limitReached &&
-    (modifiedAgoSec === undefined || modifiedAgoSec < 180);
+  const project = events.findLast((e) => e.cwd)?.cwd;
+  // Files changed after the last recorded event: the source (or someone) kept
+  // working without a hook seeing it, so the recording may be stale.
+  const lastMs = Date.parse(last?.ts ?? 0);
+  const projectChanges = project ? changedSince(project, lastMs + 2000) : { changed: [] };
+  const recentChange = projectChanges.changed.some((c) => Date.now() - Date.parse(c.modifiedAt) < 120_000);
+  const mayStillBeWorking = running !== false && (recentChange ||
+    (status.state === "no end of turn recorded" && !usage.limitReached && (modifiedAgoSec === undefined || modifiedAgoSec < 180)));
   return {
     checkedAt: new Date().toISOString(),
     chatgptAppRunning: running ?? "unknown",
@@ -71,10 +134,13 @@ export const sourceStatus = (events) => {
     transcriptModifiedSecondsAgo: modifiedAgoSec,
     turn: status,
     usage,
+    projectChangedAfterLastEvent: projectChanges.changed,
     mayStillBeWorking,
     advice: mayStillBeWorking
       ? "The source app may still be working on this task. Do not repeat actions or edit shared files; ask the user to confirm it has stopped."
-      : "No sign of ongoing work was observed. Still inspect files before repeating any action whose outcome is unknown."
+      : projectChanges.changed.length
+        ? "Project files changed after the last recorded event, so the checkpoint may be stale. Read those files before relying on it."
+        : "No sign of ongoing work was observed. Still inspect files before repeating any action whose outcome is unknown."
   };
 };
 
@@ -95,40 +161,60 @@ export const sessionSummary = (id) => {
 export const buildCheckpoint = (id) => {
   const events = readEvents(id);
   if (events.length === 0) throw new Error(`No events recorded for session ${id}.`);
+  const project = events.findLast((e) => e.cwd)?.cwd;
+  const lastMs = Date.parse(events.at(-1).ts);
   const prompts = events.filter((e) => e.event === "UserPromptSubmit");
   const actions = pairActions(events);
   const files = new Map();
   for (const a of actions) for (const f of a.files) files.set(f.path, { path: f.path, change: f.change, outcome: a.outcome, seq: a.startedSeq ?? a.resultSeq });
-  const lastReply = events.findLast((e) => e.lastAssistantMessage);
+  const artifacts = [...files.values()].slice(-30).map((f) => ({ ...f, now: project ? artifactState(project, f.path, lastMs) : { exists: "unknown" } }));
+  const finalMessages = events.filter((e) => e.lastAssistantMessage).slice(-3);
+  const transcript = events.findLast((e) => e.transcript)?.transcript;
+  const transcriptMessages = readAgentMessages(transcript).map((m) => ({ ...m, text: redactSecrets(m.text) }));
+  const remaining = artifacts.flatMap((a) => (a.now.unfinished ?? []).map((u) => ({ file: a.now.relativePath ?? a.path, ...u })));
+  const status = sourceStatus(events);
+  const missing = [
+    "Hidden reasoning, unsaved editor state, and text streamed but never completed as a message.",
+    "ChatGPT Chat-mode conversations and cloud Work threads (hooks do not run there)."
+  ];
+  if (finalMessages.length === 0) missing.push("No final assistant message: no turn was recorded as completed.");
+  if (transcriptMessages.length === 0) missing.push("No completed assistant messages found in the transcript tail.");
+  if (status.projectChangedAfterLastEvent.length) missing.push("STALE: project files changed after the last recorded event (see sourceStatus).");
+  if (artifacts.some((a) => a.now.exists === false)) missing.push("Some recorded files no longer exist on disk.");
   return {
     session_ref: sessionRef(id),
     session_id: id,
     source: "ChatGPT desktop app (Codex or local Work thread), captured by the desktop-continuity Codex plugin's hooks",
-    project: events.findLast((e) => e.cwd)?.cwd,
+    project,
     model: events.findLast((e) => e.model)?.model,
     recordedEvents: events.length,
     firstRecordedAt: events[0].ts,
-    originalRequest: clip(prompts[0]?.prompt),
-    latestRequest: prompts.length > 1 ? clip(prompts.at(-1).prompt) : undefined,
-    requestCount: prompts.length,
-    lastAssistantMessage: lastReply
-      ? { seq: lastReply.seq, at: lastReply.ts, text: clip(lastReply.lastAssistantMessage, 2000) }
-      : "None recorded. Hooks only see the final message of a completed turn.",
-    filesTouched: [...files.values()].slice(-30),
-    recentActions: actions.slice(-15).map((a) => ({
-      seq: a.startedSeq ?? a.resultSeq,
-      tool: a.tool,
-      input: clip(a.input, 300),
-      outcome: a.outcome,
-      result: a.response === undefined ? undefined : clip(a.response, 300)
-    })),
-    unknownOutcomes: actions.filter((a) => !a.resultSeq).length,
-    sourceStatus: sourceStatus(events),
-    notCaptured: [
-      "Hidden reasoning, unsaved editor state, and anything not sent to a hook.",
-      "Assistant messages between tool calls (only the final message of each completed turn is recorded).",
-      "ChatGPT Chat-mode conversations and cloud Work threads (hooks do not run there)."
-    ]
+    lastRecordedAt: events.at(-1).ts,
+    observed: {
+      note: "Recorded by hooks as it happened, or read from disk now.",
+      userMessages: prompts.slice(-10).map((p) => ({ seq: p.seq, at: p.ts, text: clip(p.prompt) })),
+      artifacts,
+      recentActions: actions.slice(-15).map((a) => ({
+        seq: a.startedSeq ?? a.resultSeq,
+        tool: a.tool,
+        input: clip(a.input, 300),
+        outcome: a.outcome,
+        result: a.response === undefined ? undefined : clip(a.response, 300)
+      })),
+      unknownOutcomes: actions.filter((a) => !a.resultSeq).length
+    },
+    agentNotes: {
+      note: "Written by the source agent. Its statements are claims, not verified facts.",
+      finalMessages: finalMessages.map((e) => ({ seq: e.seq, at: e.ts, provenance: "Stop hook", text: clip(e.lastAssistantMessage, 1500) })),
+      transcriptMessages: transcriptMessages.map((m) => ({ ...m, provenance: "Codex local transcript (undocumented format), completed messages only" }))
+    },
+    inferred: {
+      note: "Derived by desktop-continuity from file contents, not recorded intent. Confirm before relying on it.",
+      remainingWork: remaining,
+      nextStep: remaining[0] ? `Complete ${remaining[0].file}${remaining[0].under ? ` under "${remaining[0].under}"` : ""} (line ${remaining[0].line}).` : "No unfinished markers found in touched files."
+    },
+    sourceStatus: status,
+    missing
   };
 };
 

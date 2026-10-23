@@ -1,0 +1,5 @@
+{"timestamp":"2026-10-23T09:00:00.000Z","type":"session_meta","payload":{"id":"01a16800-0000-7000-8000-000000000001","originator":"Codex Desktop","cwd":"D:\\fixture"}}
+{"timestamp":"2026-10-23T09:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}
+{"timestamp":"2026-10-23T09:00:05.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","primary":{"used_percent":99.0,"window_minutes":300,"resets_at":1793000000},"secondary":{"used_percent":61.0,"window_minutes":10080,"resets_at":1793500000}}}}
+{"timestamp":"2026-10-23T09:00:06.000Z","type":"event_msg","payload":{"type":"error","message":"You’ve hit your usage limit. Upgrade to Pro (https://example.invalid/pricing) or try again at 2:00 PM.","codex_error_info":"usage_limit_exceeded"}}
+{"timestamp":"2026-10-23T09:00:06.100Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"t1","reason":"error"}}

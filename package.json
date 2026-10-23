@@ -10,7 +10,8 @@
   },
   "scripts": {
     "check": "node scripts/check.mjs",
-    "install-integrations": "node scripts/install.mjs"
+    "install-integrations": "node scripts/install.mjs",
+    "check-limits": "node scripts/check-limits.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

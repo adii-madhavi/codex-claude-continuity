@@ -3,7 +3,7 @@
 // usage: node scripts/check.mjs
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +14,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = mkdtempSync(path.join(os.tmpdir(), "dc-check-"));
 const project = path.join(tmp, "project");
 mkdirSync(project);
-writeFileSync(path.join(project, "notes.md"), "hello\nAPI_KEY=abcdef1234567890\n");
+writeFileSync(path.join(project, "notes.md"), "# Notes\n\n## Part 1\nhello\nAPI_KEY=abcdef1234567890\n\n## Part 2\nTODO: write part 2\n");
 writeFileSync(path.join(project, ".env"), "SECRET=1");
 const codexHome = path.join(tmp, "codex");
 mkdirSync(codexHome);
@@ -54,13 +54,20 @@ assert.equal(sessions[0].session_id, session);
 assert.equal(JSON.parse(await call("list_sessions", { project: "elsewhere" })).length, 0, "project filter keeps projects apart");
 
 const cp = JSON.parse(await call("get_checkpoint", { session_id: session }));
-assert.match(cp.originalRequest, /REDACTED:openai-key/);
+assert.match(cp.observed.userMessages[0].text, /REDACTED:openai-key/);
 assert.ok(!JSON.stringify(cp).includes("abcdefghijklmnopqrstuvwxyz123456"), "secret leaked into checkpoint");
-assert.equal(cp.recentActions.find((a) => a.tool === "apply_patch").outcome, "result recorded");
-assert.match(cp.recentActions.find((a) => a.tool === "Bash").outcome, /^UNKNOWN/, "missing result must not read as success");
-assert.deepEqual(cp.filesTouched.map((f) => f.path), ["notes.md"]);
+assert.ok(!JSON.stringify(cp).includes("abcdef1234567890"), "secret from a touched file leaked into checkpoint");
+assert.equal(cp.observed.recentActions.find((a) => a.tool === "apply_patch").outcome, "result recorded");
+assert.match(cp.observed.recentActions.find((a) => a.tool === "Bash").outcome, /^UNKNOWN/, "missing result must not read as success");
+assert.deepEqual(cp.observed.artifacts.map((f) => f.path), ["notes.md"]);
+assert.equal(cp.observed.artifacts[0].now.exists, true);
+assert.deepEqual(cp.inferred.remainingWork.map((r) => [r.file, r.under]), [["notes.md", "## Part 2"]], "unfinished marker found under its heading");
+assert.match(cp.inferred.nextStep, /notes\.md.*Part 2/);
+assert.equal(cp.agentNotes.finalMessages.length, 0);
+assert.ok(cp.missing.some((m) => /No final assistant message/.test(m)), "missing context is marked");
 assert.equal(cp.sourceStatus.turn.state, "no end of turn recorded");
-assert.equal(cp.sourceStatus.usage.limitReached, true);
+assert.equal(cp.sourceStatus.usage.status, "limit_reached");
+assert.deepEqual(cp.sourceStatus.projectChangedAfterLastEvent, []);
 
 assert.equal(JSON.parse(await call("get_checkpoint", { sessionId: session })).session_id, session, "sessionId alias");
 assert.match(readFileSync(path.join(tmp, "store", "mcp-calls.log"), "utf8"), /get_checkpoint args=\{"sessionId"/);
@@ -86,9 +93,19 @@ assert.ok(badId.isError, "session id must not become a path");
 
 hook({ hook_event_name: "Stop", last_assistant_message: "Added the greeting.", stop_hook_active: false });
 assert.equal(JSON.parse(await call("get_source_status", { session_id: session })).turn.state, "turn ended");
+assert.equal(JSON.parse(await call("get_checkpoint", { session_ref: ref })).agentNotes.finalMessages[0].text, "Added the greeting.");
+// A file changed after the last recorded event: stale checkpoint, and the source may still be working.
+const later = new Date(Date.now() + 10_000);
+utimesSync(path.join(project, "notes.md"), later, later);
+const stale = JSON.parse(await call("get_source_status", { session_ref: ref }));
+assert.deepEqual(stale.projectChangedAfterLastEvent.map((c) => c.path), ["notes.md"]);
+assert.equal(stale.mayStillBeWorking, true, "recent changes after the last event mean the source may still be working");
+assert.ok(JSON.parse(await call("get_checkpoint", { session_ref: ref })).missing.some((m) => /^STALE/.test(m)));
 
 const prompt = await client.getPrompt({ name: "continue_task", arguments: { session_id: session } });
 assert.match(prompt.messages[0].content.text, /get_checkpoint/);
+const latest = await client.getPrompt({ name: "continue_latest", arguments: {} });
+assert.match(latest.messages[0].content.text, new RegExp(`session_ref ${ref}`), "continue_latest names the session it picked");
 
 await client.close();
-console.log("PASS: capture, redaction, unknown outcomes, project scoping, paging, file reads, source status, prompt");
+console.log("PASS: capture, redaction, unknown outcomes, project scoping, paging, file reads, artifacts and remaining work, stale detection, source status, prompts");

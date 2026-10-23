@@ -1,0 +1,2 @@
+{"ts":"2026-10-23T09:00:00Z","kind":"turn.failed","text":"You’ve hit your usage limit. Try again at 2:00 PM."}
+{"ts":"2026-10-23T09:00:01Z","kind":"quota","used":100}

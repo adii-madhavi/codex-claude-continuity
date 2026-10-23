@@ -7,7 +7,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
+import { SKIP_DIRS, buildCheckpoint, listSessions, sourceStatus } from "./checkpoint.mjs";
 import { redactSecrets } from "./redact.mjs";
 import { assertSessionId, readEvents, resolveSession, storeRoot } from "./store.mjs";
 import { takeoverPrompt } from "./takeover.mjs";
@@ -15,7 +15,6 @@ import { takeoverPrompt } from "./takeover.mjs";
 const MAX_RESPONSE_CHARS = 20_000;
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const SECRET_FILE = /(^|[\\/])(\.env(\..*)?|.*\.(pem|key|p12|pfx)|id_(rsa|ed25519|ecdsa)|auth\.json|\.npmrc|\.netrc)$/i;
-const SKIP_DIRS = new Set([".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"]);
 
 const reply = (value) => {
   let text = typeof value === "string" ? value : JSON.stringify(value, null, 1);
@@ -75,7 +74,7 @@ server.registerTool("list_sessions", {
 
 server.registerTool("get_checkpoint", {
   title: "Get continuation checkpoint",
-  description: "Compact checkpoint for one recorded session: request, last reply, files touched, recent actions with recorded or UNKNOWN outcomes, source status, and what was not captured. Start here. Identify the session with session_ref (integer from list_sessions).",
+  description: "Compact checkpoint for one recorded session: request, last reply, files touched, recent actions with recorded or UNKNOWN outcomes, source status, and what was not captured, separated into observed facts, agent notes and inferences. Start here. Identify the session with session_ref (integer from list_sessions).",
   inputSchema: { ...sessionArgs },
   annotations: READ_ONLY
 }, guarded((args) => buildCheckpoint(resolveSession(args))));
@@ -158,6 +157,17 @@ server.registerPrompt("continue_task", {
 }, ({ session_id }) => ({
   messages: [{ role: "user", content: { type: "text", text: takeoverPrompt(assertSessionId(session_id), "manual takeover") } }]
 }));
+
+// No arguments, so nothing for a client bridge to drop. It names the session it
+// picked inside the message, which the user sees before sending.
+server.registerPrompt("continue_latest", {
+  title: "Continue the latest recorded Codex task",
+  description: "Explicit takeover of the most recently active session recorded from the ChatGPT desktop app."
+}, () => {
+  const latest = listSessions(undefined, 1)[0];
+  if (!latest) throw new Error("No recorded session yet.");
+  return { messages: [{ role: "user", content: { type: "text", text: takeoverPrompt(latest.session_id, `manual takeover of the latest session (${latest.project})`) } }] };
+});
 
 // Call log: which tool arrived with which arguments, before validation. Claude
 // Desktop's chat reaches this server through a bridge that does not appear in

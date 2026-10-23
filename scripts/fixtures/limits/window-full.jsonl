@@ -1,0 +1,5 @@
+{"timestamp":"2026-10-23T09:00:00.000Z","type":"session_meta","payload":{"id":"01a16800-0000-7000-8000-000000000008","originator":"Codex Desktop","cwd":"D:\\fixture"}}
+{"timestamp":"2026-10-23T09:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t9"}}
+{"timestamp":"2026-10-23T09:00:07.317Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","limit_name":null,"primary":{"used_percent":100,"window_minutes":300,"resets_at":1792526779},"secondary":{"used_percent":31,"window_minutes":10080,"resets_at":1793093779},"credits":{"has_credits":false,"unlimited":false,"balance":"0"},"individual_limit":null,"spend_control_reached":null,"plan_type":null,"rate_limit_reached_type":null}}}
+{"timestamp":"2026-10-23T09:00:24.275Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":"codex","limit_name":null,"primary":null,"secondary":null,"credits":null,"individual_limit":null,"spend_control_reached":null,"plan_type":null,"rate_limit_reached_type":null}}}
+{"timestamp":"2026-10-23T09:00:24.287Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t9"}}

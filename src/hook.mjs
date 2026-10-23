@@ -4,13 +4,13 @@
 // appends one redacted, size-bounded event and exits 0 with no output, which
 // Codex treats as "continue". It must never block or fail the source app.
 
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sanitize } from "./redact.mjs";
 import { appendEvent, storeRoot } from "./store.mjs";
 import { readUsageSignals } from "./source.mjs";
-import { openTakeover } from "./takeover.mjs";
+import { claimTakeover, openTakeover } from "./takeover.mjs";
 
 const read = async () => {
   const chunks = [];
@@ -54,20 +54,22 @@ const toEvent = (p) => ({
   lastAssistantMessage: text(p.last_assistant_message, 4000),
   startSource: p.source,
   reason: p.reason,
-  agentType: p.agent_type
+  agentType: p.agent_type,
+  // Set only by a deliberately simulated trigger (scripts/simulate-limit.mjs), never by Codex.
+  ...(process.env.DESKTOP_CONTINUITY_SIMULATED ? { simulated: true } : {})
 });
 
-// Automatic takeover where it is supported: a turn that ends while the local
-// transcript shows a usage window at 100% opens Claude Desktop with a
-// prefilled continuation prompt (claude:// links only prefill; the user sends).
+// Automatic takeover: a turn that ends (Stop) while the transcript's latest
+// structured record says limit_reached opens a Claude Desktop chat and copies
+// the continuation prompt. Only a classified limit counts (never prose,
+// "approaching" or "unknown"), and each limit signal launches at most once.
+// Unverified: whether Codex fires Stop for a turn that ends in a limit error.
 const maybeAutoTakeover = (event) => {
   if (event.event !== "Stop" || process.env.DESKTOP_CONTINUITY_NO_AUTO_TAKEOVER) return;
   const usage = readUsageSignals(event.transcript);
-  if (!usage.limitReached) return;
-  const marker = path.join(storeRoot(), "sessions", `${event.session}.takeover-opened`);
-  if (existsSync(marker)) return;
-  writeFileSync(marker, new Date().toISOString());
-  openTakeover(event.session, "usage limit reported in the local Codex transcript");
+  if (usage.status !== "limit_reached") return;
+  if (!claimTakeover(event.session, `limit@${usage.signal.at}`)) return;
+  openTakeover(event.session, `${event.simulated ? "SIMULATED " : ""}usage limit (${usage.signal.kind} at ${usage.signal.at})`);
 };
 
 let event;

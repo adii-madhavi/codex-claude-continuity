@@ -1,0 +1,5 @@
+{"timestamp":"2026-10-23T09:00:00.000Z","type":"session_meta","payload":{"id":"01a16800-0000-7000-8000-000000000007","originator":"Codex Desktop","cwd":"D:\\fixture"}}
+{"timestamp":"2026-10-23T09:00:06.000Z","type":"event_msg","payload":{"type":"error","message":"You’ve hit your usage limit. Try again at 2:00 PM.","codex_error_info":"usage_limit_exceeded"}}
+{"timestamp":"2026-10-23T09:00:06.100Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"t1","reason":"error"}}
+{"timestamp":"2026-10-23T14:01:00.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t2"}}
+{"timestamp":"2026-10-23T14:01:05.000Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":1.0,"window_minutes":300,"resets_at":1793018000}}}}
