@@ -97,7 +97,6 @@ Run `node scripts/check.mjs` for the synthetic self-check.
   Claude saw that the turn was interrupted, the source was not still working, no limit was hit, and the project folders were empty, so nothing had been produced to repeat or avoid.
 - **Continuation.** Claude asked three scoping questions: format (short film), flavor (supernatural), destination (editable doc). It then wrote "What the House Keeps", a 15-scene supernatural short of about 12 minutes, as a Claude Docs document. It reported that it did not touch the original Codex project folder.
   - Codex's partial draft from before the Stop was never saved locally, so Claude started the script fresh from the recorded request. It did not pick up the half-written text.
-  - Claude itself shows an "Opus 5.5" model label; I didn't check which model the chat used.
 
 ## Findings worth knowing
 
