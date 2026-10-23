@@ -101,7 +101,7 @@ export const buildCheckpoint = (id) => {
   const lastReply = events.findLast((e) => e.lastAssistantMessage);
   return {
     session_id: id,
-    source: "ChatGPT desktop app, Codex or local Work thread, captured by Codex command hooks",
+    source: "ChatGPT desktop app (Codex or local Work thread), captured by the desktop-continuity Codex plugin's hooks",
     project: events.findLast((e) => e.cwd)?.cwd,
     model: events.findLast((e) => e.model)?.model,
     recordedEvents: events.length,
