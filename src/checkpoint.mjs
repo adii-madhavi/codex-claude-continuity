@@ -37,6 +37,34 @@ const changedSince = (root, sinceMs) => {
   return { changed, truncated: seen > MAX_SCAN };
 };
 
+/** Untouched text files under the project with unfinished markers (bounded walk, first 10 files). */
+const unfinishedElsewhere = (project, touched, lastMs) => {
+  const found = [];
+  let seen = 0;
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const d of entries) {
+      if (++seen > 500 || found.length >= 10) return;
+      const full = path.join(dir, d.name);
+      if (d.isDirectory()) {
+        if (!SKIP_DIRS.has(d.name)) walk(full);
+        continue;
+      }
+      const rel = path.relative(project, full);
+      if (touched.has(rel.toLowerCase()) || !/\.(md|txt|js|mjs|cjs|ts|tsx|jsx|py|json|html|css)$/i.test(d.name)) continue;
+      const state = artifactState(project, rel, lastMs);
+      if (state.unfinished?.length) found.push({ file: rel, markers: state.unfinished.slice(0, 3) });
+    }
+  };
+  walk(project);
+  return found;
+};
+
 /** Current on-disk state of a touched file, read only when it resolves inside the project. */
 const artifactState = (project, file, lastEventMs) => {
   try {
@@ -242,6 +270,10 @@ export const buildCheckpoint = (id) => {
   const transcript = events.findLast((e) => e.transcript)?.transcript;
   const transcriptMessages = readAgentMessages(transcript).map((m) => ({ ...m, text: redactSecrets(m.text) }));
   const remaining = artifacts.flatMap((a) => (a.now.unfinished ?? []).map((u) => ({ file: a.now.relativePath ?? a.path, ...u })));
+  // Unfinished markers in project files the session never touched (live case: two
+  // untouched TODO stubs in a multi-file project). Bounded; labelled separately.
+  const touched = new Set(artifacts.map((a) => (a.now.relativePath ?? "").toLowerCase()));
+  const elsewhere = project ? unfinishedElsewhere(project, touched, lastMs) : [];
   const status = sourceStatus(events);
   const missing = [
     "Hidden reasoning, unsaved editor state, and text streamed but never completed as a message.",
@@ -282,7 +314,12 @@ export const buildCheckpoint = (id) => {
     inferred: {
       note: "Derived by desktop-continuity from file contents, not recorded intent. Confirm before relying on it.",
       remainingWork: remaining,
-      nextStep: remaining[0] ? `Complete ${remaining[0].file}${remaining[0].under ? ` under "${remaining[0].under}"` : ""} (line ${remaining[0].line}).` : "No unfinished markers found in touched files."
+      unfinishedInOtherProjectFiles: elsewhere,
+      nextStep: remaining[0]
+        ? `Complete ${remaining[0].file}${remaining[0].under ? ` under "${remaining[0].under}"` : ""} (line ${remaining[0].line}).`
+        : elsewhere[0]
+          ? `No unfinished markers in touched files; ${elsewhere.length} untouched file(s) still have them, starting with ${elsewhere[0].file}. Check the recorded request before assuming they belong to this task.`
+          : "No unfinished markers found in touched files."
     },
     sourceStatus: status,
     missing

@@ -16,6 +16,9 @@ const project = path.join(tmp, "project");
 mkdirSync(project);
 writeFileSync(path.join(project, "notes.md"), "# Notes\n\n## Part 1\nhello\nAPI_KEY=abcdef1234567890\n\n## Part 2\nTODO: write part 2\n");
 writeFileSync(path.join(project, ".env"), "SECRET=1");
+// An untouched stub with a TODO, older than the session (like the multi-file demo's stubs).
+writeFileSync(path.join(project, "stub.js"), "// TODO: implement\n");
+utimesSync(path.join(project, "stub.js"), new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000));
 const codexHome = path.join(tmp, "codex");
 mkdirSync(codexHome);
 const transcript = path.join(codexHome, "rollout-test.jsonl");
@@ -71,6 +74,7 @@ assert.equal(cp.observed.artifacts.find((f) => f.path === "shell-made.md").outco
 assert.equal(cp.observed.artifacts[0].now.exists, true);
 assert.deepEqual(cp.inferred.remainingWork.map((r) => [r.file, r.under]).sort(), [["notes.md", "## Part 2"], ["shell-made.md", "## Draft"]], "unfinished marker found under its heading");
 assert.match(cp.inferred.nextStep, /notes\.md.*Part 2/);
+assert.deepEqual(cp.inferred.unfinishedInOtherProjectFiles.map((f) => f.file), ["stub.js"], "untouched files with TODOs are listed separately");
 assert.equal(cp.agentNotes.finalMessages.length, 0);
 assert.ok(cp.missing.some((m) => /No final assistant message/.test(m)), "missing context is marked");
 assert.equal(cp.sourceStatus.turn.state, "no end of turn recorded");

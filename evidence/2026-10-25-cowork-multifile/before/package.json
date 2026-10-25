@@ -1,0 +1,7 @@
+{
+  "name": "dc-demo-multifile",
+  "private": true,
+  "description": "Disposable desktop-continuity demo. Safe to delete.",
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}
