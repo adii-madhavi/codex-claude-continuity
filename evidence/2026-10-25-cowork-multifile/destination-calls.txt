@@ -1,0 +1,17 @@
+# Cowork takeover of session 01a171ef (session_ref 1792912896093)
+# takeover launch log
+2026-10-26T15:42:21.502Z launch 01a171ef-b05d-7663-8862-2c2951b8db09 via cowork+folder manual takeover
+# desktop-continuity MCP calls
+2026-10-26T15:46:17.254Z get_checkpoint args={"session_ref":1792912896093} paramKeys=name,arguments
+2026-10-26T15:46:18.030Z get_source_status args={"session_ref":1792912896093} paramKeys=name,arguments
+# Claude Desktop main.log: Cowork VM commands and folder grants
+2026-10-26 21:11:09 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=106
+2026-10-26 21:11:16 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=825
+2026-10-26 21:11:21 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=441
+2026-10-26 21:11:24 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=473
+2026-10-26 21:11:28 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=447
+2026-10-26 21:16:10 [info] LocalAgentModeSessions.grantRemoteSessionFolders: cse_01KRZUE8SoF5Qj17tnExituT [1]
+2026-10-26 21:16:10 [info] grantRemoteSessionFolders: showing consent dialog for cse_01KRZUE8SoF5Qj17tnExituT (1 folder(s), window focused, default Allow, waited 357ms)
+2026-10-26 21:16:12 [info] grantRemoteSessionFolders: user allowed for cse_01KRZUE8SoF5Qj17tnExituT (dwell 1558ms, remember=false)
+2026-10-26 21:16:22 [info] [remote-bash] vmUser=rcw-01krzue8sof5qj17tnexitut mounts=dc-demo-multifile:rw cmdLen=144
+2026-10-26 21:17:40 [info] [remote-bash] vmUser=rcw-01krzue8sof5qj17tnexitut mounts=dc-demo-multifile:rw cmdLen=361
