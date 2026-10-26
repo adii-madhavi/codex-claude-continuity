@@ -93,9 +93,10 @@ export const takeoverClaims = (sessionId) => {
 
 /** Resolves when clip.exe has finished (or after 2 s), so a caller that exits next does not cut it off. */
 const copyToClipboard = (text) => new Promise((resolve) => {
-  if (process.platform !== "win32") return resolve();
-  // The prompt is ASCII, which clip.exe copies as-is (a UTF-16 BOM would be pasted too).
-  const clip = spawn("clip", [], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+  const tool = { win32: "clip", darwin: "pbcopy" }[process.platform];
+  if (!tool) return resolve();
+  // The prompt is ASCII, which clip.exe and pbcopy copy as-is (a UTF-16 BOM would be pasted too).
+  const clip = spawn(tool, [], { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
   const timer = setTimeout(resolve, 2000);
   clip.on("error", () => { clearTimeout(timer); resolve(); });
   clip.on("close", () => { clearTimeout(timer); resolve(); });
@@ -113,7 +114,8 @@ export const openTakeover = async (sessionId, why) => {
   if (dryRun) return;
   await copyToClipboard(takeoverPrompt(sessionId, why));
   // explorer.exe hands a URL to its registered protocol handler without a shell parsing it.
-  const child = spawn(process.platform === "win32" ? "explorer.exe" : "xdg-open", [url], {
+  const opener = { win32: "explorer.exe", darwin: "open" }[process.platform] ?? "xdg-open";
+  const child = spawn(opener, [url], {
     detached: true,
     stdio: "ignore",
     windowsHide: true

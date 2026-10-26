@@ -61,7 +61,15 @@ const pluginDir = path.join(codexHome, "plugins", "desktop-continuity");
 if (dryRun) console.log(`[dry-run] would copy ${path.join(root, "codex-plugin")} to ${pluginDir}`);
 else {
   cpSync(path.join(root, "codex-plugin"), pluginDir, { recursive: true, force: true });
-  console.log(`copied:  plugin to ${pluginDir}`);
+  // Point every hook at this clone's hook.mjs (the repo copy names the original D:\ checkout).
+  // Forward slashes work for node in every shell Codex uses; quote only when needed.
+  const hookScript = path.join(root, "src", "hook.mjs").replaceAll("\\", "/");
+  const command = `node ${/\s/.test(hookScript) ? JSON.stringify(hookScript) : hookScript}`;
+  const hooksFile = path.join(pluginDir, "hooks", "hooks.json");
+  const pluginHooks = readJson(hooksFile, { hooks: {} });
+  for (const groups of Object.values(pluginHooks.hooks)) for (const g of groups) for (const h of g.hooks) h.command = command;
+  writeFileSync(hooksFile, `${JSON.stringify(pluginHooks, null, 2)}\n`);
+  console.log(`copied:  plugin to ${pluginDir} (hooks run: ${command})`);
 }
 
 // The marketplace root is the home folder; plugin paths are relative to it.

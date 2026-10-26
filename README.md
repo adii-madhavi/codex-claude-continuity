@@ -4,7 +4,13 @@ This project records what the ChatGPT desktop app's Codex and local agent thread
 
 It is a separate project from `D:\keepitmovin`, which supervises terminal agents in a PTY; that is not used here. `src/redact.mjs` is adapted from keepitmovin under the MIT license (see `NOTICE`).
 
-Tested on 2026-10-23 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556.
+Tested on 2026-10-23 to 2026-10-25 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556. macOS code paths exist but have not been run. **For current status and next steps, see `HANDOFF.md`.**
+
+> **Later findings (2026-10-25), not yet folded into the sections below:**
+> - **Cowork.** It runs the agent in the cloud. Its folder dialog said so: "this session runs in the cloud". The folder that the takeover link attaches is **read-only**, so Cowork must ask for write access, a separate native dialog the user has to approve. Cowork editing a partial artifact has **not** passed yet; see `HANDOFF.md`.
+> - **Takeover command.** `continue_latest` and `src/takeover.mjs` with no session id now pick only the newest *unfinished* session. They exclude completed, simulated, continued-elsewhere and app-background threads, and they list the candidates instead of guessing when more than one project is unfinished. `--wait` reports when the destination first connects; Cowork's first call arrived after 199 s.
+> - **Checkpoint additions.** `get_source_status` returns `destinationMayEdit`. The checkpoint flags recorded results whose output reports an error, and lists unfinished markers in project files the source never touched.
+> - **Watcher.** `src/watch.mjs` watches transcripts for a limit without needing the Stop hook. It shares the one-launch-per-signal guard with the hook.
 
 ## Assessment against the original goal
 

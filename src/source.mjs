@@ -161,12 +161,18 @@ export const readAgentMessages = (file, max = 5) => {
   }
 };
 
-/** Whether the ChatGPT desktop app process is running (Windows). */
+/** Whether the ChatGPT desktop app process is running (Windows and macOS; undefined elsewhere). */
 export const sourceAppRunning = () => {
-  if (process.platform !== "win32") return undefined;
   try {
-    return /ChatGPT\.exe/i.test(execFileSync("tasklist", ["/FI", "IMAGENAME eq ChatGPT.exe", "/NH"], { encoding: "utf8", windowsHide: true }));
+    if (process.platform === "win32") {
+      return /ChatGPT\.exe/i.test(execFileSync("tasklist", ["/FI", "IMAGENAME eq ChatGPT.exe", "/NH"], { encoding: "utf8", windowsHide: true }));
+    }
+    if (process.platform === "darwin") {
+      // pgrep exits 1 (throws) when no process matches.
+      return execFileSync("pgrep", ["-x", "ChatGPT"], { encoding: "utf8" }).trim().length > 0;
+    }
   } catch {
-    return undefined;
+    return process.platform === "darwin" ? false : undefined;
   }
+  return undefined;
 };
