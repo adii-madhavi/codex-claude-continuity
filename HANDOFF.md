@@ -39,7 +39,7 @@ The macOS code paths are written but **not yet run on a Mac**: `open` and `pbcop
 
 ## Next steps
 
-1. **Multi-file demo.** Create a fresh copy of the project (the 4 stubs, the tests and `TASK.md` are in `evidence/2026-10-25-cowork-multifile/before/`, with the stubs reset to TODO).
+1. **Multi-file demo.** Create a fresh copy of the project from `evidence/2026-10-25-cowork-multifile/before/` (tests, `TASK.md`, `package.json`). In that copy `slugify.js` and `titleCase.js` are already implemented; replace them with the TODO stub that `truncate.js` shows.
    - In ChatGPT Work mode, send the prompt (it is in the recorded events), then press Stop during the pause.
    - Run `node src/takeover.mjs <id> --wait=600`.
    - In Cowork: confirm the folder, press Send, Allow the tools, reply OK, grant write access, and approve the edits.
