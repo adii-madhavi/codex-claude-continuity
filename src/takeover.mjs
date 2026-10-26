@@ -113,13 +113,23 @@ export const openTakeover = async (sessionId, why) => {
   } catch {}
   if (dryRun) return;
   await copyToClipboard(takeoverPrompt(sessionId, why));
-  // explorer.exe hands a URL to its registered protocol handler without a shell parsing it.
-  const opener = { win32: "explorer.exe", darwin: "open" }[process.platform] ?? "xdg-open";
-  const child = spawn(opener, [url], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true
-  });
+  // Windows: ShellExecute through PowerShell's Start-Process, with the URL in an
+  // environment variable so no shell parses it. Observed on Claude Desktop 3.6556.2.0
+  // (2026-10-26): explorer.exe <url> opened File Explorer instead, and a hidden or
+  // detached PowerShell never reached Claude; a normal child that exits does.
+  if (process.platform === "win32") {
+    await new Promise((resolve) => {
+      const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "Start-Process -FilePath $env:DC_TAKEOVER_URL"], {
+        env: { ...process.env, DC_TAKEOVER_URL: url },
+        stdio: "ignore"
+      });
+      const timer = setTimeout(resolve, 10_000);
+      child.on("error", () => { clearTimeout(timer); resolve(); });
+      child.on("close", () => { clearTimeout(timer); resolve(); });
+    });
+    return;
+  }
+  const child = spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], { detached: true, stdio: "ignore" });
   child.on("error", () => {});
   child.unref();
 };

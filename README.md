@@ -4,36 +4,44 @@ This project records what the ChatGPT desktop app's Codex and local agent thread
 
 It is a separate project from `D:\keepitmovin`, which supervises terminal agents in a PTY; that is not used here. `src/redact.mjs` is adapted from keepitmovin under the MIT license (see `NOTICE`).
 
-Tested on 2026-10-23 to 2026-10-25 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556. macOS code paths exist but have not been run. **For current status and next steps, see `HANDOFF.md`.**
+Tested on 2026-10-23 to 2026-10-26 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556.1.0 / 3.6556.2.0. macOS code paths exist but have not been run. **For handoff to another machine, see `HANDOFF.md`.**
 
-> **Later findings (2026-10-25), not yet folded into the sections below:**
-> - **Cowork.** It runs the agent in the cloud. Its folder dialog said so: "this session runs in the cloud". The folder that the takeover link attaches is **read-only**, so Cowork must ask for write access, a separate native dialog the user has to approve. Cowork editing a partial artifact has **not** passed yet; see `HANDOFF.md`.
-> - **Takeover command.** `continue_latest` and `src/takeover.mjs` with no session id now pick only the newest *unfinished* session. They exclude completed, simulated, continued-elsewhere and app-background threads, and they list the candidates instead of guessing when more than one project is unfinished. `--wait` reports when the destination first connects; Cowork's first call arrived after 199 s.
-> - **Checkpoint additions.** `get_source_status` returns `destinationMayEdit`. The checkpoint flags recorded results whose output reports an error, and lists unfinished markers in project files the source never touched.
-> - **Watcher.** `src/watch.mjs` watches transcripts for a limit without needing the Stop hook. It shares the one-launch-per-signal guard with the hook.
+Observed on these versions, which may change with app updates:
+- **Cowork runs its agent in the cloud.** Its folder dialog says so. It reaches the local MCP servers configured in `claude_desktop_config.json`, although one help article says Cowork cannot.
+- **The takeover link attaches the folder read-only.** Writing needs a separate native "Allow Claude to access this folder?" grant, which times out if nobody answers.
+- **Link-filled prompts carry a caution banner.** Claude Code's permission check refused to let the agent press Send past it, or click any folder/permission dialog; those clicks are the user's.
+- **`claude://` links can silently fail.** On 3.6556.2.0, `explorer.exe <url>` opened File Explorer, and a hidden or detached launcher never reached Claude. `src/takeover.mjs` now uses a normal `Start-Process` child, which opened the draft.
 
 ## Assessment against the original goal
 
 1. **What now works**
    - Capture of local ChatGPT desktop agent threads, as each event happens.
-   - A checkpoint that keeps observed facts, agent notes and inferred remaining work apart, finds the files written so far, and marks unknown outcomes and stale state.
-   - Read-only MCP retrieval in Claude Desktop.
-   - A limit detector that classifies structured records only and answers "unknown" when it can't tell.
-   - At most one takeover chat per limit signal.
-2. **Demonstrated in the real desktop apps**
-   - ChatGPT saved a partial `glossary.md` (3 of 6 sections).
-   - Claude Desktop's chat read the checkpoint, the source status and one extra event through MCP, confirmed Codex had stopped, waited for the user's OK, and finished **the same file**. The finished sections are byte-identical (validator VALID).
-   - For the simulated trigger, Claude Desktop retrieved the checkpoint through MCP.
-   - The earlier horror-script run showed task transfer only.
+   - A checkpoint that keeps observed facts, agent notes and inferred remaining work apart. It finds files written by shell commands and lists unfinished markers in files the source never touched. It flags results whose output reports an error and marks unknown outcomes and stale state.
+   - Read-only MCP retrieval in Claude Desktop Chat and Cowork, with a `destinationMayEdit` gate.
+   - Choosing the session to continue: `continue_latest` and `takeover.mjs` without an id pick only an unfinished session, and list the candidates when the choice is ambiguous.
+   - A limit detector that classifies structured records only and answers "unknown" when it can't tell. A watcher works without the Stop hook. At most one takeover per limit signal.
+2. **Demonstrated in the real desktop apps (all interruptions simulated with Stop)**
+   - **Chat view, Markdown:** finished the same partial `glossary.md`. 3 finished sections byte-identical, 3 completed (`evidence/2026-10-23-glossary/`).
+   - **Cowork, Markdown:** finished the same partial web-security `glossary.md`. 2 finished sections byte-identical, 4 completed in 4 separate edits (`evidence/2026-10-23-cowork-glossary/`).
+   - **Cowork, multi-file Node project:**
+     - The agent drove ChatGPT itself: Work mode, Send, then Stop during a deliberate pause. Codex had implemented 2 of 4 modules.
+     - Cowork called only `get_checkpoint` and `get_source_status`, then wrote the other 2 modules. The finished files, tests and task file were unchanged.
+     - `node --test` passes 4/4, run locally by the agent, not by Cowork. Cowork reports it ran `npm test` too (`evidence/2026-10-25-cowork-multifile/`).
+   - **Simulated limit:** the real hook opened a Cowork draft with the takeover prompt and the folder, once per signal (`evidence/2026-10-23-simulated-limit/`).
 3. **What used simulation**
-   - Both interruptions were the user pressing Stop. In the glossary run Codex was told to pause, so Stop could land mid-task.
-   - The limit-triggered takeover used `scripts/simulate-limit.mjs` with a sanitized transcript at the shape of a real limit seen on this machine. No real limit was hit or forced.
-4. **What remains manual**
-   - Starting the takeover: run `node src\takeover.mjs` (the automatic trigger does this itself on a classified limit). It opens a Cowork session with the prompt prefilled and the project folder attached.
-   - Confirming the folder and pressing Send.
-   - Allowing the tool calls.
-   - Replying OK before Claude's first edit.
-   - If the project folder no longer exists, the chat route is used instead: Ctrl+V and Add folder are needed too.
+   - Every interruption was a user or agent pressing Stop, during a deliberate `Start-Sleep` in the Cowork runs.
+   - The limit trigger used `scripts/simulate-limit.mjs` with a sanitized transcript at the shape of a real limit seen on this machine. No real limit was hit or forced.
+   - Whether Codex fires its Stop hook on a real limit is not established. The watcher removes that dependency, but it has not been run against a real limit either.
+4. **What remains manual (Cowork route), counted as separate interactions**
+   1. Start the takeover: run `node src\takeover.mjs`, or let the automatic trigger do it. It opens a Cowork draft with the prompt and the recorded folder.
+   2. Confirm the attached folder, if Claude Desktop asks.
+   3. Press **Send**. The agent was not allowed to do this past the caution banner.
+   4. Approve tool calls, if Claude Desktop asks; in these runs it did not ask separately.
+   5. Reply **OK** after Claude states the evidence that the source stopped.
+   6. **Allow** write access to the folder.
+   7. Approve edits, if asked.
+
+   If the folder has moved, the chat route is used instead, which adds Ctrl+V and Add folder.
 5. **What cannot be recovered**
    - Hidden reasoning.
    - Text streamed but never completed as a message.

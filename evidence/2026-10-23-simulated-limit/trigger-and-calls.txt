@@ -18,3 +18,12 @@
 2026-10-23T07:24:31.834Z list_sessions args={"limit":25} paramKeys=name,arguments
 2026-10-23T07:24:37.375Z get_checkpoint args={"session_ref":1792739901440} paramKeys=name,arguments
 2026-10-23T07:24:37.945Z get_source_status args={"session_ref":1792739901440} paramKeys=name,arguments
+
+# 2026-10-26: end-to-end with Claude Desktop 3.6556.2.0 (SIMULATED trigger via scripts/simulate-limit.mjs)
+2026-10-26T15:49:38.174Z launch 01a167a0-0000-7000-8000-5151a7ed0003 via cowork+folder SIMULATED usage limit (rate limit snapshot at 2026-10-23T09:00:07.317Z)
+2026-10-26T15:50:45.236Z launch 01a167a0-0000-7000-8000-5151a7ed0003 via cowork+folder manual takeover
+2026-10-26T15:52:38.194Z launch 01a167a0-0000-7000-8000-5151a7ed0004 via cowork+folder SIMULATED usage limit (rate limit snapshot at 2026-10-23T09:00:07.317Z)
+- run 3 (15:49:38Z, opener = hidden detached PowerShell Start-Process): launch logged once, but NO Cowork draft appeared.
+- controlled test: same opener without hidden/detached opened a draft; hidden/detached did not.
+- run 4 (15:52:38Z, fixed opener, Chat view in front): a Cowork draft opened with the full takeover prompt (trigger: SIMULATED usage limit, session_ref 1792739901440), Claude Desktop's caution banner, and a native 'Another app attached desktop-continuity-demo ... Continue' folder dialog left for the user. Second identical Stop: no second launch.
+- Not verified: whether the draft opens when the Code view is in front; whether the launch works from inside Codex's hook sandbox.

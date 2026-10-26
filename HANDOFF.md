@@ -13,19 +13,19 @@ When ChatGPT desktop's agent (Codex, or local Work) stops or hits its usage limi
 - **Cowork retrieval works.** Cowork sessions call the local `desktop-continuity` tools (`evidence/2026-10-23-simulated-limit/`, `evidence/2026-10-23-cowork-glossary/`).
 - **Limit detector.** 9 fixtures pass, including the shape of a real 100% limit window found in this machine's history. A watcher (`src/watch.mjs`) does not depend on the Stop hook.
 
-## Not finished
+## Completed on the Windows PC (2026-10-26)
 
-1. **Cowork editing a partial artifact.**
-   - Session `01a167b2…` read the checkpoint and the file, then asked for folder access. The dialog said "this session runs in the cloud".
-   - The folder that the takeover link attaches is **read-only** to Cowork, so writing needs a separate grant. The user has to click **Allow** on that native dialog; Claude Code's permission check refused to let the agent click it.
-   - On the Windows PC that dialog was still open when work moved to the Mac. `glossary.md` there is still 2 finished + 4 TODO (`evidence/2026-10-23-cowork-glossary/before.md`).
-2. **Multi-file continuation.**
-   - Source half done: `D:\dc-demo-multifile`, recorded session `01a171ef…`. Codex implemented `slugify` and `titleCase`, then was stopped during a deliberate pause. 2 of 4 tests pass (`evidence/2026-10-25-cowork-multifile/`).
-   - The Cowork half has not been run.
-3. **Simulated limit into Cowork.** The trigger and the Cowork retrieval are done. A takeover that also *edits* after a simulated limit has not been run.
-4. **`continue_latest` in the `/` menu.** Not confirmed. MCP prompts are user-invoked and their UI placement is app-specific. The supported invocation is `node src/takeover.mjs` (no id: newest unfinished session; it refuses when the choice is ambiguous).
+- **Cowork finished the partial web-security `glossary.md` in place.** 2 finished sections byte-identical, 4 completed (`evidence/2026-10-23-cowork-glossary/`).
+- **Cowork finished the partial multi-file project.** Codex had implemented 2 of 4 modules; Cowork wrote the other 2; `node --test` 4/4, run locally (`evidence/2026-10-25-cowork-multifile/`).
+- **The simulated-limit hook opened a Cowork takeover draft**, once per signal, after the opener fix (`evidence/2026-10-23-simulated-limit/`).
 
-The live state above (recorded sessions, partial files, the open dialog) is **only on the Windows PC**. On a new machine, rerun the demos from scratch.
+## Still open
+
+1. **`continue_latest` in the `/` menu.** Not confirmed. MCP prompts are user-invoked and their UI placement is app-specific. The supported invocation is `node src/takeover.mjs` (no id: newest unfinished session; it refuses when the choice is ambiguous).
+2. **Real-limit behaviour.** Whether Codex fires Stop on a real limit, and whether the takeover launch works from inside Codex's hook sandbox. `src/watch.mjs` avoids the first dependency; neither has been observed on a real limit.
+3. **macOS.** The macOS code paths are written but have not been run.
+
+The recorded sessions and demo folders exist **only on the Windows PC**. On a new machine, rerun the demos from scratch.
 
 ## Continue on macOS
 
@@ -37,15 +37,14 @@ The live state above (recorded sessions, partial files, the open dialog) is **on
 
 The macOS code paths are written but **not yet run on a Mac**: `open` and `pbcopy` in `src/takeover.mjs`, `pgrep -x ChatGPT` in `src/source.mjs`, and the installer's hook path. `scripts/demo/desktop.ps1` is Windows-only.
 
-## Next steps
+## To reproduce a demo on a new machine
 
-1. **Multi-file demo.** Create a fresh copy of the project from `evidence/2026-10-25-cowork-multifile/before/` (tests, `TASK.md`, `package.json`). In that copy `slugify.js` and `titleCase.js` are already implemented; replace them with the TODO stub that `truncate.js` shows.
+1. **Multi-file.** Create a fresh copy of the project from `evidence/2026-10-25-cowork-multifile/before/` (tests, `TASK.md`, `package.json`). In that copy `slugify.js` and `titleCase.js` are already implemented; replace them with the TODO stub that `truncate.js` shows.
    - In ChatGPT Work mode, send the prompt (it is in the recorded events), then press Stop during the pause.
-   - Run `node src/takeover.mjs <id> --wait=600`.
-   - In Cowork: confirm the folder, press Send, Allow the tools, reply OK, grant write access, and approve the edits.
+   - Run `node src/takeover.mjs <id> --wait=600`, with Claude Desktop's Chat/Cowork view in front.
+   - In Cowork: confirm the folder, press Send, reply OK, Allow write access, and approve the edits.
    - Validate with `npm test`, plus hashes showing the 2 finished files are unchanged.
-2. **Glossary demo, in Cowork.** Same flow; check with `node scripts/validate-continuation.mjs before.md after.md`.
-3. **Record and document.** Save the evidence, then update the README: Cowork runs in the cloud, the attached folder is read-only until a write grant, and count every user interaction.
+2. **Glossary.** Same flow; check with `node scripts/validate-continuation.mjs before.md after.md`.
 
 ## Gotchas found the hard way
 
