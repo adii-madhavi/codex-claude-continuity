@@ -20,3 +20,16 @@ Destination connected: first desktop-continuity call for this session after 199 
 # File after the user approved Cowork's edits (13:16 local)
 2590b55eca1a4dda25224cd2c60b27efd9134290b0c265017516081382e28cc6 *glossary.md
 2026-10-23 13:08:54.083860400 +0530 778 bytes
+
+# 2026-10-26: after 'continue' and a re-asked write grant
+# desktop-continuity MCP calls
+2026-10-26T15:41:08.176Z get_source_status args={"session_ref":1792741087069} paramKeys=name,arguments
+# Claude Desktop main.log: Cowork VM commands with the folder mounted rw
+2026-10-26 21:11:09 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=106
+2026-10-26 21:11:16 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=825
+2026-10-26 21:11:21 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=441
+2026-10-26 21:11:24 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=473
+2026-10-26 21:11:28 [info] [remote-bash] vmUser=rcw-01tbsqyv3jm167aqba7qadhx mounts=desktop-continuity-demo:rw,referenced-chatgpt-conversation-this-is-an-3:rw cmdLen=447
+# File after Cowork's edits
+312f165592a56a55b3339d42211b108edb66e4a99d9c601849498d54e73d9e52 *glossary.md
+2026-10-26 21:11:29.050349300 +0530 2027 bytes
