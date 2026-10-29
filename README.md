@@ -4,7 +4,7 @@ This project records what the ChatGPT desktop app's Codex and local agent thread
 
 It is a separate project from `D:\keepitmovin`, which supervises terminal agents in a PTY; that is not used here. `src/redact.mjs` is adapted from keepitmovin under the MIT license (see `NOTICE`).
 
-Tested on 2026-10-23 to 2026-10-26 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556.1.0 / 3.6556.2.0. macOS code paths exist but have not been run. **For handoff to another machine, see `HANDOFF.md`.**
+Tested on 2026-10-23 to 2026-10-26 with Windows 11, ChatGPT desktop 26.1016 (Codex 0.163) and Claude Desktop 3.6556.1.0 / 3.6556.2.0. On 2026-10-29 the checks and the macOS code paths were run on a Mac (see *macOS* below); the live takeover has not yet been repeated there. **For handoff to another machine, see `HANDOFF.md`.**
 
 Observed on these versions, which may change with app updates:
 - **Cowork runs its agent in the cloud.** Its folder dialog says so. It reaches the local MCP servers configured in `claude_desktop_config.json`, although one help article says Cowork cannot.
@@ -41,7 +41,7 @@ Observed on these versions, which may change with app updates:
    6. **Allow** write access to the folder.
    7. Approve edits, if asked.
 
-   If the folder has moved, the chat route is used instead, which adds Ctrl+V and Add folder.
+   If the folder has moved, the chat route is used instead, which adds Ctrl+V (Cmd+V on macOS) and Add folder.
 5. **What cannot be recovered**
    - Hidden reasoning.
    - Text streamed but never completed as a message.
@@ -83,6 +83,21 @@ Other sources:
 
 No cookies, tokens or account endpoints are used, and no approval control is bypassed.
 
+## macOS (checked 2026-10-29, ChatGPT desktop `com.openai.codex`, Claude Desktop with the `claude://` scheme registered, Node 26.11)
+
+| Code path | Result |
+|---|---|
+| `node scripts/check.mjs`, `check-limits.mjs`, `check-takeover.mjs` | All PASS |
+| `pgrep -x ChatGPT` (`sourceAppRunning`) | Finds the running app (its executable is `ChatGPT`) |
+| `pbcopy` (takeover clipboard) | Round-trips the prompt |
+| Installer, run against a throwaway `HOME` | Writes `~/Library/Application Support/Claude/claude_desktop_config.json`, `~/.agents/plugins/marketplace.json` and the plugin, keeps other servers and backs up first |
+| Installed hook command, run with a GUI-style `PATH=/usr/bin:/bin` | Records the event |
+| MCP server over stdio | Answers `initialize` and `tools/list` |
+
+Fixed on the Mac: GUI apps start with a minimal PATH, so a hook command of bare `node` fails (`node: not found`). Outside Windows the installer now names node by absolute path, and prefers the PATH entry (`/opt/homebrew/bin/node`) over Homebrew's versioned Cellar path, which a `brew upgrade` removes.
+
+Not yet run on macOS: `open claude://cowork/new?...` opening a prefilled draft, hooks running inside Codex's macOS sandbox, and the live takeover demos.
+
 ## Architecture
 
 ```
@@ -122,14 +137,24 @@ src/takeover.mjs ─▶ claude://cowork/new?q=<prompt>&folder=<project> (+ clipb
 3. **Allow the tools.** Allow the desktop-continuity tool calls, or choose Always allow for these read-only tools.
 4. **Approve the plan.** Reply OK when Claude states the evidence that the source stopped and names the files it will change. Then approve its edits.
 
-**Fallback.** If the project folder no longer exists, or you set `DESKTOP_CONTINUITY_ROUTE=chat`, a Chat-view conversation opens instead. Then press Ctrl+V, and click **Add folder** if the folder isn't a `continuity-files` folder.
+**Fallback.** If the project folder no longer exists, or you set `DESKTOP_CONTINUITY_ROUTE=chat`, a Chat-view conversation opens instead. Then press Ctrl+V (Cmd+V on macOS), and click **Add folder** if the folder isn't a `continuity-files` folder.
 
 **Verified:**
 - The Cowork link prefills the prompt and attaches the folder.
 - A Cowork session called the desktop-continuity tools (`trigger-and-calls.txt`).
 - The glossary *edits* were made from a Chat-view session with an added folder.
 
-**Not tested:** edits from a Cowork session, and whether `continue_latest` appears in the `/` menu.
+**Since verified:** edits from a Cowork session (`evidence/2026-10-23-cowork-glossary/`, `evidence/2026-10-25-cowork-multifile/`).
+
+**Not tested:** whether `continue_latest` appears in the `/` menu.
+
+### Recovery
+
+If `takeover.mjs --wait` reports no call from the destination:
+- **No draft appeared.** Rerun with `--again`, or paste the prompt from the clipboard into a new Cowork or Chat session.
+- **Draft is there but nothing happens.** Press **Send**, then allow the desktop-continuity tool calls.
+- **Claude says it has no desktop-continuity tools.** The MCP server was not loaded: fully quit Claude Desktop (tray on Windows, Cmd+Q on macOS) and reopen it. Its own log is `mcp-calls.log` in the store folder.
+- **A tool reports a missing session.** Pass the integer `session_ref` from the prompt, not the string id.
 
 ## Setup
 
@@ -145,7 +170,7 @@ The installer backs up every file it changes and keeps all other settings:
 
 Then:
 1. Restart ChatGPT, install **Desktop continuity** from *Personal plugins*, and trust its 8 hooks.
-2. Fully quit Claude Desktop from the tray and reopen it. Do this again after any change to `src/` that the MCP server uses.
+2. Fully quit Claude Desktop (from the tray on Windows, Cmd+Q on macOS) and reopen it. Do this again after any change to `src/` that the MCP server uses.
 
 Checks (no AI tool is used):
 - `node scripts/check.mjs`: capture, redaction, artifacts, stale detection, MCP tools and prompts.
@@ -234,4 +259,4 @@ A local Work thread ("make me a script for a horror show") was stopped after abo
 - **File detection by timestamp** can include files that something else changed during the session. They are labelled "writing tool not identified".
 - **Writes in Claude Desktop** need a folder you grant (Add folder) or a configured `continuity-files` folder. This project does not widen write access on its own.
 - **No full automation.** Takeover still needs a folder confirmation, Send, tool approval and your OK. There are no desktop-automation tools in this environment, and no documented interface submits a Claude Desktop message.
-- **Test scope.** Only one unfinished artifact, a Markdown file, was continued live. A desktop Codex task editing a multi-file code project has not been tested.
+- **Test scope.** Two Markdown artifacts and one multi-file Node project were continued live, all on Windows, all interrupted with Stop.
