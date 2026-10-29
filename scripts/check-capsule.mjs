@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -50,7 +50,8 @@ git(src.project, "add", "-A");
 git(src.project, "commit", "-qm", "base");
 // The destination already has the repository at the base commit (as a PC with a clone would).
 const dest = path.join(tmp, "pc-project");
-git(tmp, "clone", "-q", src.project, dest);
+// Keep LF checkouts byte-identical to the source on Windows (core.autocrlf would write CRLF).
+git(tmp, "-c", "core.autocrlf=false", "clone", "-q", src.project, dest);
 
 // Work in progress on the source: an edit, a new binary file, a deletion, a credential.
 writeFileSync(path.join(src.project, "lib", "a.js"), "export const a = 2; // finished\n");
@@ -107,7 +108,7 @@ assert.equal(handoff.events.lastIncludedSeq, 5);
 assert.match(handoff.checkpoint.observed.recentActions.find((a) => a.input?.includes("npm run migrate")).outcome, /^UNKNOWN/);
 // The same document validates under Session Capsule's JSON Schema (shared contract).
 const schemaCheck = run(process.execPath, ["--input-type=module", "-e", `
-  import { validateNamed } from ${JSON.stringify(path.join(capsuleDir, "core", "common", "schema.ts"))};
+  import { validateNamed } from ${JSON.stringify(pathToFileURL(path.join(capsuleDir, "core", "common", "schema.ts")).href)};
   import fs from "node:fs";
   const errors = validateNamed("handoff", JSON.parse(fs.readFileSync(process.argv[1], "utf8")));
   if (errors.length) { console.error(errors.join("\\n")); process.exit(1); }`, handoffFile], {});
@@ -225,7 +226,7 @@ writeFileSync(path.join(dest, "lib", "b.js"), "export const b = 2;\n");
 const back = path.join(tmp, "back.capsule");
 ok(run(process.execPath, [capsuleCli, "pack", "--project", dest, "--tool", "manual", "--out", back, "--yes"], pcEnv), "reverse pack");
 const home = path.join(tmp, "home-again");
-git(tmp, "clone", "-q", dest, home);
+git(tmp, "-c", "core.autocrlf=false", "clone", "-q", dest, home);
 ok(run(process.execPath, [capsuleCli, "import", back, "--dest", home, "--apply", "--deletions", "apply", "--yes"], { ...pcEnv, SESSION_CAPSULE_HOME: path.join(tmp, "home-capsule") }), "reverse import");
 assert.equal(readFileSync(path.join(home, "lib", "b.js"), "utf8"), "export const b = 2;\n");
 
