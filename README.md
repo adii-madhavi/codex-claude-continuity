@@ -100,7 +100,7 @@ Not yet run on macOS: `open claude://cowork/new?...` opening a prefilled draft, 
 
 ## Moving a task to another computer (with Session Capsule)
 
-Same-computer takeover, described in the rest of this README, is unchanged. To continue on a different computer, for example pausing on a MacBook and finishing on a Windows PC with the MacBook switched off, Blocker works with [Session Capsule](../session-capsule/README.md).
+Same-computer takeover, described in the rest of this README, is unchanged. To continue on a different computer, for example pausing on a MacBook and finishing on a Windows PC with the MacBook switched off, Blocker works with [Session Capsule](../session-capsule/README.md), a separate private repository at [adii-madhavi/session-capsule](https://github.com/adii-madhavi/session-capsule). The relative link works only when both projects sit side by side, as in `handoff/blocker` and `handoff/session-capsule`.
 
 - **Blocker** stays the recorder and the read-only retrieval server.
 - **Session Capsule** packs the context and project files into one archive, then previews, applies and rolls back the import on the other computer.
