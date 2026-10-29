@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -9,12 +9,18 @@ import path from "node:path";
 
 // Codex runs hooks inside its sandbox, where only a plugin's PLUGIN_DATA folder
 // is documented as writable. The MCP server (outside Codex) reads the same
-// folder: ~/.codex/plugins/data/<plugin>-<marketplace>.
+// folder: ~/.codex/plugins/data/<plugin>-<marketplace>. The marketplace is
+// "personal" when scripts/install.mjs installed the plugin and GITHUB_MARKETPLACE
+// when it was added with `codex plugin marketplace add`.
 export const MARKETPLACE = "personal";
-export const storeRoot = () =>
-  process.env.DESKTOP_CONTINUITY_HOME ??
-  process.env.PLUGIN_DATA ??
-  path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "plugins", "data", `desktop-continuity-${MARKETPLACE}`);
+export const GITHUB_MARKETPLACE = "codex-claude-continuity";
+// ponytail: when both installs exist only the GitHub one is read; remove the other to merge them.
+const defaultStore = () => {
+  const data = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "plugins", "data");
+  const fromGitHub = path.join(data, `desktop-continuity-${GITHUB_MARKETPLACE}`);
+  return existsSync(fromGitHub) ? fromGitHub : path.join(data, `desktop-continuity-${MARKETPLACE}`);
+};
+export const storeRoot = () => process.env.DESKTOP_CONTINUITY_HOME ?? process.env.PLUGIN_DATA ?? defaultStore();
 
 const sessionsDir = () => path.join(storeRoot(), "sessions");
 

@@ -1,0 +1,28 @@
+{
+  "name": "desktop-continuity",
+  "version": "0.1.0",
+  "description": "Records Codex desktop activity through lifecycle hooks so Claude Desktop or Claude Code can continue an interrupted task, on this computer or another one.",
+  "author": {
+    "name": "adii-madhavi",
+    "url": "https://github.com/adii-madhavi"
+  },
+  "homepage": "https://github.com/adii-madhavi/codex-claude-continuity",
+  "repository": "https://github.com/adii-madhavi/codex-claude-continuity",
+  "license": "MIT",
+  "keywords": ["continuity", "takeover", "handoff", "mcp", "hooks"],
+  "hooks": "./hooks/codex-hooks.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Desktop continuity",
+    "shortDescription": "Record activity for Claude takeover",
+    "longDescription": "Lifecycle hooks append a redacted, size-bounded event per prompt, tool call, tool result and turn end to this plugin's data folder. Claude Desktop and Claude Code read it through a separate read-only MCP server, and the skill exports a handoff for Session Capsule.",
+    "developerName": "adii-madhavi",
+    "category": "Productivity",
+    "capabilities": ["Lifecycle hooks", "Instructions"],
+    "websiteURL": "https://github.com/adii-madhavi/codex-claude-continuity",
+    "defaultPrompt": [
+      "Export this task so I can continue it on another computer.",
+      "Show what desktop-continuity recorded for this session."
+    ]
+  }
+}

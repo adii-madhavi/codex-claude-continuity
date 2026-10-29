@@ -1,0 +1,20 @@
+{
+  "name": "codex-claude-continuity",
+  "interface": {
+    "displayName": "Codex → Claude continuity"
+  },
+  "plugins": [
+    {
+      "name": "desktop-continuity",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
