@@ -207,7 +207,47 @@ If `takeover.mjs --wait` reports no call from the destination:
 - **Claude says it has no desktop-continuity tools.** The MCP server was not loaded: fully quit Claude Desktop (tray on Windows, Cmd+Q on macOS) and reopen it. Its own log is `mcp-calls.log` in the store folder.
 - **A tool reports a missing session.** Pass the integer `session_ref` from the prompt, not the string id.
 
-## Setup
+## Install as plugins
+
+The same repository is a Codex plugin (records sessions), a Claude Code plugin (reads them) and a
+Claude Desktop extension (reads them). None of them needs `npm install`: the scripts that use npm
+packages are bundled into `dist/` (`npm run build`, checked by `npm run check-dist`), and the
+Codex hook uses only Node built-ins. Node.js 20 or later must be on the `PATH`.
+
+**Codex (ChatGPT desktop app and CLI): record sessions**
+
+```bash
+codex plugin marketplace add adii-madhavi/codex-claude-continuity
+codex plugin add desktop-continuity@codex-claude-continuity
+```
+
+Restart the app, open `/hooks`, and trust the 8 hooks. They write to
+`~/.codex/plugins/data/desktop-continuity-codex-claude-continuity`, which the readers below find
+on their own.
+
+**Claude Code (CLI and desktop Code tab): read recordings and imports**
+
+```bash
+claude plugin marketplace add adii-madhavi/codex-claude-continuity
+claude plugin install desktop-continuity@codex-claude-continuity
+```
+
+This adds the read-only `desktop-continuity` MCP server and the `desktop-continuity` skill.
+
+**Claude Desktop (Chat and Cowork): read recordings and imports**
+
+Build the extension with `npm install && npm run build:mcpb`, then open
+`dist/desktop-continuity.mcpb` with Claude Desktop (double-click it, or drag it onto Settings →
+Extensions). It
+replaces the manual `claude_desktop_config.json` entry for the read-only server.
+
+The plugin files live on branch `feat/session-capsule-integration` until it is merged; before
+that, clone the branch and pass the local folder to `marketplace add` instead of
+`adii-madhavi/codex-claude-continuity`. On macOS, GUI apps start without Homebrew's `PATH`; if a
+hook reports `node: command not found`, use the manual setup below, which writes node's absolute
+path.
+
+## Manual setup (alternative)
 
 ```
 cd D:\desktop-continuity
@@ -226,6 +266,7 @@ Then:
 Checks (no AI tool is used):
 - `node scripts/check.mjs`: capture, redaction, artifacts, stale detection, MCP tools and prompts.
 - `node scripts/check-limits.mjs`: limit fixtures and one launch per signal.
+- `node scripts/check-dist.mjs`: the bundles in `dist/` run without `node_modules`.
 - `node scripts/validate-continuation.mjs <before> <after>`: whether a continued artifact kept its finished sections and completed the rest.
 
 ## Evidence

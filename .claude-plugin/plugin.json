@@ -1,0 +1,13 @@
+{
+  "name": "desktop-continuity",
+  "version": "0.1.0",
+  "description": "Read-only MCP access to Codex sessions recorded by desktop-continuity and to tasks imported from another computer, so Claude Code can continue them.",
+  "author": {
+    "name": "adii-madhavi",
+    "url": "https://github.com/adii-madhavi"
+  },
+  "homepage": "https://github.com/adii-madhavi/codex-claude-continuity",
+  "repository": "https://github.com/adii-madhavi/codex-claude-continuity",
+  "license": "MIT",
+  "keywords": ["continuity", "takeover", "handoff", "mcp", "codex"]
+}

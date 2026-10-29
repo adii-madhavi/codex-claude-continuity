@@ -1,0 +1,100 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 10,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 3,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"import(require('url').pathToFileURL(require('path').join(process.env.CLAUDE_PLUGIN_ROOT, 'src', 'hook.mjs')).href)\"",
+            "timeout": 3,
+            "statusMessage": "Recording for desktop-continuity"
+          }
+        ]
+      }
+    ]
+  }
+}

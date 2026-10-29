@@ -1,2 +1,4 @@
 evidence/** -text
 scripts/fixtures/** -text
+# Built by `npm run build`; collapsed in GitHub diffs.
+dist/*.mjs linguist-generated=true

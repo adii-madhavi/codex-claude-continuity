@@ -1,1 +1,6 @@
 node_modules/
+# Built by `npm run build:mcpb`; attach the .mcpb to a release instead of committing it.
+dist/*.mcpb
+desktop-extension/server/
+desktop-extension/LICENSE
+desktop-extension/NOTICE

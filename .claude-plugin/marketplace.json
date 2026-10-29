@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "codex-claude-continuity",
+  "description": "Continue Codex tasks in Claude, on the same computer or another one.",
+  "owner": {
+    "name": "adii-madhavi",
+    "url": "https://github.com/adii-madhavi"
+  },
+  "plugins": [
+    {
+      "name": "desktop-continuity",
+      "description": "Read recorded Codex sessions and imported task handoffs over a read-only MCP server.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

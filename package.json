@@ -14,11 +14,18 @@
     "check-limits": "node scripts/check-limits.mjs",
     "check-takeover": "node scripts/check-takeover.mjs",
     "check-capsule": "node scripts/check-capsule.mjs",
-    "watch": "node src/watch.mjs"
+    "watch": "node src/watch.mjs",
+    "build": "node scripts/build.mjs",
+    "build:mcpb": "node scripts/build.mjs && mcpb validate desktop-extension/manifest.json && mcpb pack desktop-extension dist/desktop-continuity.mcpb",
+    "check-dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "@modelcontextprotocol/server-filesystem": "2026.8.31",
     "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
+    "esbuild": "0.28.2"
   }
 }

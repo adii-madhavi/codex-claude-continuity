@@ -1,0 +1,46 @@
+{
+  "manifest_version": "0.3",
+  "name": "desktop-continuity",
+  "display_name": "Desktop continuity",
+  "version": "0.1.0",
+  "description": "Read-only access to Codex sessions recorded by desktop-continuity and to tasks imported from another computer, so Claude can continue them.",
+  "long_description": "Serves the recordings that desktop-continuity's Codex plugin writes (one redacted, size-bounded event per prompt, tool call, tool result and turn end) and the task handoffs imported with Session Capsule. Every tool is read-only. Install the Codex plugin to record sessions; see the repository README.",
+  "author": {
+    "name": "adii-madhavi",
+    "url": "https://github.com/adii-madhavi"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adii-madhavi/codex-claude-continuity"
+  },
+  "homepage": "https://github.com/adii-madhavi/codex-claude-continuity",
+  "license": "MIT",
+  "keywords": ["codex", "continuity", "takeover", "handoff"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/mcp-server.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/mcp-server.mjs"]
+    }
+  },
+  "tools": [
+    { "name": "list_sessions", "description": "List Codex desktop sessions recorded by desktop-continuity, most recent first." },
+    { "name": "get_checkpoint", "description": "Compact checkpoint for one recorded session, separated into observed facts, agent notes and inferences." },
+    { "name": "get_source_status", "description": "Fresh check of the source session: end-of-turn events, ChatGPT app process, transcript activity and usage-limit signals." },
+    { "name": "get_events", "description": "Compact rows of recorded events after a sequence number." },
+    { "name": "get_event", "description": "Full stored detail of one event, already redacted and size-bounded at capture." },
+    { "name": "list_project_files", "description": "List a directory inside the session's recorded project directory (read-only)." },
+    { "name": "read_project_file", "description": "Read part of a text file inside the session's recorded project directory." },
+    { "name": "list_imports", "description": "List task handoffs imported from another computer (via Session Capsule), newest first." },
+    { "name": "get_imported_checkpoint", "description": "Checkpoint of a task handed over from another computer, with its historical source status." },
+    { "name": "get_imported_events", "description": "Compact rows of the events recorded on the source computer, in their original order." },
+    { "name": "get_imported_event", "description": "Full detail of one event recorded on the source computer." },
+    { "name": "list_imported_project_files", "description": "List a directory inside the project folder chosen on this computer for an imported task (read-only)." },
+    { "name": "read_imported_project_file", "description": "Read part of a text file inside the project folder chosen on this computer for an imported task." }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": { "node": ">=20.0.0" }
+  }
+}
