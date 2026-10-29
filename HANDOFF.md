@@ -19,6 +19,27 @@ When ChatGPT desktop's agent (Codex, or local Work) stops or hits its usage limi
 - **Cowork finished the partial multi-file project.** Codex had implemented 2 of 4 modules; Cowork wrote the other 2; `node --test` 4/4, run locally (`evidence/2026-10-25-cowork-multifile/`).
 - **The simulated-limit hook opened a Cowork takeover draft**, once per signal, after the opener fix (`evidence/2026-10-23-simulated-limit/`).
 
+## Session Capsule integration (2026-10-29, branch `feat/session-capsule-integration`, not yet merged)
+
+Adds cross-computer continuation without changing same-computer takeover. README, *Moving a task to another computer*, describes the flow and the route table. The contract is in `session-capsule/docs/blocker-integration.md`.
+
+- **New:**
+  - `src/capsule/schema.mjs`: the handoff object, mirrored from Session Capsule's JSON Schema.
+  - `src/capsule/export.mjs`: checkpoint and events to a handoff. Refused while `sourceStatus` says the source may still be working.
+  - `src/capsule/imported-store.mjs`: isolated imports, project mapping and deduplication.
+  - `src/capsule/continue.mjs`: destination routes.
+  - `scripts/check-capsule.mjs`.
+- **Changed:**
+  - `src/mcp-server.mjs`: 6 read-only import tools and the `continue_import` prompt. The existing tools are unchanged; the file listing and read code is now shared.
+  - `src/takeover.mjs`: `openUrl` and `copyToClipboard` are exported with the same behaviour, and `importedTakeoverPrompt` is added.
+  - `scripts/check.mjs`: the expected tool list includes the new tools.
+- **Run on a Mac (2026-10-29):** `check`, `check-limits`, `check-takeover` and `check-capsule` all pass. `check-capsule` uses synthetic events on one machine. The export gate was exercised because ChatGPT was running; on a machine where it isn't, the check prints that the gate was not exercised.
+- **Not yet done:**
+  - A live MacBook → PC and PC → MacBook transfer with real Codex sessions.
+  - `continue.mjs --to cowork` on macOS.
+  - Any Claude Code or Codex launch route. Both are manual paste.
+- **Open decisions:** backup retention (Session Capsule keeps import backups until removed) and whether encryption should be the default (it is optional; unencrypted capsules are labelled as such).
+
 ## Still open
 
 1. **`continue_latest` in the `/` menu.** Not confirmed. MCP prompts are user-invoked and their UI placement is app-specific. The supported invocation is `node src/takeover.mjs` (no id: newest unfinished session; it refuses when the choice is ambiguous).

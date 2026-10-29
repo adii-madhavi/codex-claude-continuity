@@ -54,7 +54,10 @@ const call = async (name, args) => {
 };
 
 const tools = (await client.listTools()).tools.map((t) => t.name).sort();
-assert.deepEqual(tools, ["get_checkpoint", "get_event", "get_events", "get_source_status", "list_project_files", "list_sessions", "read_project_file"]);
+assert.deepEqual(tools, [
+  "get_checkpoint", "get_event", "get_events", "get_imported_checkpoint", "get_imported_event", "get_imported_events", "get_source_status",
+  "list_imported_project_files", "list_imports", "list_project_files", "list_sessions", "read_imported_project_file", "read_project_file"
+]);
 assert.ok((await client.listTools()).tools.every((t) => t.annotations?.readOnlyHint === true));
 
 const sessions = JSON.parse(await call("list_sessions", {}));
