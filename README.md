@@ -98,6 +98,57 @@ Fixed on the Mac: GUI apps start with a minimal PATH, so a hook command of bare 
 
 Not yet run on macOS: `open claude://cowork/new?...` opening a prefilled draft, hooks running inside Codex's macOS sandbox, and the live takeover demos.
 
+## Moving a task to another computer (with Session Capsule)
+
+Same-computer takeover, described in the rest of this README, is unchanged. To continue on a different computer, for example pausing on a MacBook and finishing on a Windows PC with the MacBook switched off, Blocker works with [Session Capsule](../session-capsule/README.md).
+
+- **Blocker** stays the recorder and the read-only retrieval server.
+- **Session Capsule** packs the context and project files into one archive, then previews, applies and rolls back the import on the other computer.
+
+The two exchange one versioned JSON document, the handoff object. Its contract is in `session-capsule/docs/blocker-integration.md`, and `src/capsule/schema.mjs` validates it here.
+
+**On the source computer**, stop or pause the ChatGPT agent first:
+
+```sh
+node src/capsule/export.mjs <session_ref> --out task.handoff.json   # refused while the source may still be working
+capsule pack --project <project folder> --handoff task.handoff.json [--mode context] [--encrypt]
+```
+
+**On the destination computer**, the source can be off:
+
+```sh
+capsule import task.capsule --dest <project folder>          # preview only
+capsule import task.capsule --dest <project folder> --apply --deletions apply|skip
+node src/capsule/imported-store.mjs register "<project folder>/.session-capsule/<capsule id>"
+node src/capsule/continue.mjs <import_ref> --to cowork|chat|claude-code|codex|manual
+```
+
+How imports are kept separate:
+
+- An import lives under `<store>/imports/imp_<capsule id>/`, never in `sessions/`.
+- Registering the same capsule twice is a no-op. Different content under the same capsule ID is refused.
+- `import_ref` is its own integer space; it is never a `session_ref`.
+- New tools read imports: `list_imports`, `get_imported_checkpoint`, `get_imported_events`, `get_imported_event`, `list_imported_project_files` and `read_imported_project_file`. They are read-only, and there is a `continue_import` prompt.
+- File tools read only the folder chosen at registration. Paths in the recorded history are provenance and are never rewritten.
+
+How status works for an import:
+
+- `get_imported_checkpoint` labels the source status **historical** and reports the live source status as **unknown**. The continuation prompt says not to call `get_source_status`, which checks this computer.
+- An export is a checkpoint, not a lock across offline computers. Don't keep working on the source after exporting.
+
+### Supported routes
+
+| Surface | Capture (source) | Continue on destination |
+|---|---|---|
+| Codex desktop (ChatGPT app, Codex/local Work threads) | Blocker hooks: verified on Windows; macOS code paths checked, live install not yet | Manual: paste the message (`continue.mjs --to codex`) |
+| Codex CLI | Not verified with Blocker hooks. Session Capsule can read its history directly (`capsule pack --tool codex`), but only desktop sessions were observed | Manual |
+| Claude Desktop Chat / Cowork | No capture | `claude://` links with prompt prefill: verified on Windows with Claude Desktop 3.6556; not yet observed on macOS |
+| Claude Code (desktop Code tab, CLI) | Not captured by Blocker. Session Capsule reads its local history (`capsule pack --tool claude-code`), verified on macOS with Claude Code 2.1.309 | Manual: paste the message |
+
+Native session restoration is not supported on any route. Every destination gets a **new session that receives context**. Hidden reasoning, unsaved editor state, unfinished streamed messages and running processes never transfer.
+
+Checks: `npm run check-capsule` runs the whole flow on synthetic events with two simulated computers on one machine. Before any import it deletes the source store, project and transcripts. It is not a live MacBook ↔ PC demonstration.
+
 ## Architecture
 
 ```

@@ -10,7 +10,9 @@ import { z } from "zod";
 import { SECRET_FILE, SKIP_DIRS, buildCheckpoint, listSessions, pickLatestEligible, sourceStatus } from "./checkpoint.mjs";
 import { redactSecrets } from "./redact.mjs";
 import { assertSessionId, readEvents, resolveSession, storeRoot } from "./store.mjs";
-import { takeoverPrompt } from "./takeover.mjs";
+import { importedTakeoverPrompt, takeoverPrompt } from "./takeover.mjs";
+import { importProjectRoot, listImports, mapToDestination, readImport, resolveImport } from "./capsule/imported-store.mjs";
+import { createHash } from "node:crypto";
 
 const MAX_RESPONSE_CHARS = 20_000;
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -53,12 +55,88 @@ const projectRoot = (sessionId) => {
   }
 };
 
-const insideProject = (sessionId, relative) => {
-  const root = projectRoot(sessionId);
+const insideProject = (sessionId, relative) => insideRoot(projectRoot(sessionId), relative);
+
+const insideRoot = (root, relative) => {
   const target = realpathSync(path.resolve(root, relative ?? "."));
   const rel = path.relative(root, target);
   if (rel.startsWith("..") || path.isAbsolute(rel)) throw new Error("Path is outside the recorded project directory.");
   return { root, target, rel: rel || "." };
+};
+
+const listDir = (root, target, rel) => ({
+  project: root,
+  dir: rel,
+  entries: readdirSync(target, { withFileTypes: true })
+    .filter((d) => !SKIP_DIRS.has(d.name))
+    .slice(0, 200)
+    .map((d) => {
+      const full = path.join(target, d.name);
+      return d.isDirectory() ? { name: `${d.name}/` } : { name: d.name, bytes: statSync(full).size, modified: statSync(full).mtime.toISOString() };
+    })
+});
+
+const readSlice = (target, rel, offset, maxChars) => {
+  if (SECRET_FILE.test(target)) throw new Error("Refusing to read a credential file.");
+  const text = readFileSync(target, "utf8");
+  const start = offset ?? 0;
+  const slice = text.slice(start, start + (maxChars ?? 8_000));
+  return `${rel} (chars ${start}-${start + slice.length} of ${text.length}, modified ${statSync(target).mtime.toISOString()})\n\n${redactSecrets(slice)}`;
+};
+
+// Imported capsules (from another computer, via Session Capsule). Everything is
+// read from Blocker's imported store and the project folder the user mapped on
+// this computer; nothing depends on the source computer or its paths.
+const importedCheckpoint = (id) => {
+  const { record, handoff } = readImport(id);
+  const root = importProjectRoot(id);
+  const capsuleFiles = new Map((handoff.capsule?.files ?? []).map((f) => [f.path, f.sha256]));
+  const artifacts = handoff.checkpoint?.observed?.artifacts ?? [];
+  const destinationFiles = artifacts.slice(0, 50).map((a) => {
+    const rel = mapToDestination(a.now?.relativePath ?? a.path, handoff.session.sourceProjectPath);
+    if (!rel) return { recordedPath: a.path, state: "not mapped: path is outside the source project folder" };
+    let state;
+    try {
+      const { target } = insideRoot(root, rel);
+      const sha = createHash("sha256").update(readFileSync(target)).digest("hex");
+      state = !capsuleFiles.has(rel) ? "exists; not in the capsule's file manifest" : capsuleFiles.get(rel) === sha ? "matches the capsule" : "differs from the capsule";
+    } catch {
+      state = "missing on this computer";
+    }
+    return { recordedPath: a.path, destinationPath: rel, state };
+  });
+  return {
+    import_ref: record.import_ref,
+    imported_id: record.imported_id,
+    note: "History handed over from another computer. It is read-only; new work here is a new session.",
+    provenance: {
+      recorder: handoff.createdBy,
+      capturedAt: handoff.capturedAt,
+      source: handoff.source,
+      originalSession: handoff.session,
+      lastIncludedSeq: handoff.events?.lastIncludedSeq,
+      eventsIncluded: handoff.events?.included,
+      eventsOmittedBefore: handoff.events?.omittedBefore,
+      sourcePaths: "Paths in the history refer to the source computer. File tools below read the mapped folder on this computer."
+    },
+    destination: { projectRoot: root, mode: record.mode, filesApplied: record.filesApplied, contextCheck: record.contextCheck, registeredAt: record.registeredAt },
+    observed: handoff.checkpoint?.observed ?? null,
+    agentNotes: handoff.checkpoint?.agentNotes ?? null,
+    inferred: handoff.checkpoint?.inferred ?? null,
+    destinationFiles,
+    sourceStatus: { historical: true, ...(handoff.sourceStatusAtCapture ?? { note: "No source status was captured." }) },
+    liveSourceStatus: {
+      status: "unknown",
+      detail: "Not checked. The source computer is not reachable from here and Blocker has no remote check; this computer's processes and files say nothing about it. Ask the user if it matters."
+    },
+    coverage: handoff.coverage,
+    userNotes: handoff.notes,
+    missing: [
+      ...(handoff.checkpoint?.missing ?? handoff.coverage.missing),
+      "Recorded on another computer: hidden reasoning, unsaved editor state, unfinished streamed text and running processes did not transfer.",
+      ...(record.mode === "context-only" ? ["Context-only capsule: project files were moved separately; check contextCheck and destinationFiles for mismatches."] : [])
+    ]
+  };
 };
 
 const server = new McpServer({ name: "desktop-continuity", version: "0.1.0" });
@@ -124,14 +202,7 @@ server.registerTool("list_project_files", {
   annotations: READ_ONLY
 }, guarded(({ dir, ...args }) => {
   const { root, target, rel } = insideProject(resolveSession(args), dir);
-  const entries = readdirSync(target, { withFileTypes: true })
-    .filter((d) => !SKIP_DIRS.has(d.name))
-    .slice(0, 200)
-    .map((d) => {
-      const full = path.join(target, d.name);
-      return d.isDirectory() ? { name: `${d.name}/` } : { name: d.name, bytes: statSync(full).size, modified: statSync(full).mtime.toISOString() };
-    });
-  return { project: root, dir: rel, entries };
+  return listDir(root, target, rel);
 }));
 
 server.registerTool("read_project_file", {
@@ -146,11 +217,87 @@ server.registerTool("read_project_file", {
   annotations: READ_ONLY
 }, guarded(({ path: file, offset, max_chars, ...args }) => {
   const { target, rel } = insideProject(resolveSession(args), file);
-  if (SECRET_FILE.test(target)) throw new Error("Refusing to read a credential file.");
-  const text = readFileSync(target, "utf8");
-  const start = offset ?? 0;
-  const slice = text.slice(start, start + (max_chars ?? 8_000));
-  return `${rel} (chars ${start}-${start + slice.length} of ${text.length}, modified ${statSync(target).mtime.toISOString()})\n\n${redactSecrets(slice)}`;
+  return readSlice(target, rel, offset, max_chars);
+}));
+
+// Imported capsules: separate, read-only tools. import_ref is its own integer
+// space; it is never a session_ref.
+const importArgs = { import_ref: z.number().int().optional(), import_id: z.string().optional() };
+
+server.registerTool("list_imports", {
+  title: "List capsules imported from another computer",
+  description: "List task handoffs imported from another computer (via Session Capsule), newest first. Each row has an import_ref integer for the other import tools. These are history, not live sessions.",
+  inputSchema: {},
+  annotations: READ_ONLY
+}, guarded(() => listImports().map((r) => {
+  const { handoff } = readImport(r.imported_id);
+  return {
+    import_ref: r.import_ref,
+    imported_id: r.imported_id,
+    projectOnThisComputer: r.projectRoot,
+    mode: r.mode,
+    capturedAt: handoff.capturedAt,
+    sourcePlatform: handoff.source.platform,
+    firstRequest: String(handoff.events?.items?.find((e) => e.event === "UserPromptSubmit")?.prompt ?? "").slice(0, 160) || undefined
+  };
+})));
+
+server.registerTool("get_imported_checkpoint", {
+  title: "Get the checkpoint of an imported task",
+  description: "Checkpoint of a task handed over from another computer: observed facts, agent notes, inferences and missing context as recorded there, the HISTORICAL source status (current source activity is unknown), and the state of recorded files in the project folder on this computer. Start here for imports; do not call get_source_status for them.",
+  inputSchema: { ...importArgs },
+  annotations: READ_ONLY
+}, guarded((args) => importedCheckpoint(resolveImport(args))));
+
+server.registerTool("get_imported_events", {
+  title: "Page through an imported task's recorded events",
+  description: "Compact rows of the events recorded on the source computer, in their original order and seq numbers, after a sequence number.",
+  inputSchema: { ...importArgs, after_seq: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(50).optional(), event: z.string().optional() },
+  annotations: READ_ONLY
+}, guarded(({ after_seq, limit, event, ...args }) => {
+  const items = readImport(resolveImport(args)).handoff.events?.items ?? [];
+  const rows = items.filter((e) => e.seq > (after_seq ?? 0) && (!event || e.event === event)).slice(0, limit ?? 20);
+  return { total: items.length, rows: rows.map(compact), next_after_seq: rows.at(-1)?.seq };
+}));
+
+server.registerTool("get_imported_event", {
+  title: "Get one imported event in full",
+  description: "Full detail of one event recorded on the source computer (redacted and size-bounded at capture and again at export).",
+  inputSchema: { ...importArgs, seq: z.number().int().min(1) },
+  annotations: READ_ONLY
+}, guarded(({ seq, ...args }) => {
+  const id = resolveImport(args);
+  const event = (readImport(id).handoff.events?.items ?? []).find((e) => e.seq === seq);
+  if (!event) throw new Error(`No event ${seq} in imported capsule ${id}.`);
+  return event;
+}));
+
+server.registerTool("list_imported_project_files", {
+  title: "List files in an imported task's project folder",
+  description: "List a directory inside the project folder chosen on this computer for an imported task (read-only, max 200 entries).",
+  inputSchema: { ...importArgs, dir: z.string().optional() },
+  annotations: READ_ONLY
+}, guarded(({ dir, ...args }) => {
+  const { root, target, rel } = insideRoot(importProjectRoot(resolveImport(args)), dir);
+  return listDir(root, target, rel);
+}));
+
+server.registerTool("read_imported_project_file", {
+  title: "Read a file in an imported task's project folder",
+  description: "Read part of a text file inside the project folder chosen on this computer for an imported task. Secrets are redacted; credential files are refused.",
+  inputSchema: { ...importArgs, path: z.string(), offset: z.number().int().min(0).optional(), max_chars: z.number().int().min(1).max(15_000).optional() },
+  annotations: READ_ONLY
+}, guarded(({ path: file, offset, max_chars, ...args }) => {
+  const { target, rel } = insideRoot(importProjectRoot(resolveImport(args)), file);
+  return readSlice(target, rel, offset, max_chars);
+}));
+
+server.registerPrompt("continue_import", {
+  title: "Continue a task imported from another computer",
+  description: "Explicit continuation of a capsule imported from another computer, using the import tools.",
+  argsSchema: { import_id: z.string() }
+}, ({ import_id }) => ({
+  messages: [{ role: "user", content: { type: "text", text: importedTakeoverPrompt(readImport(resolveImport({ import_id })).record, "manual continuation") } }]
 }));
 
 server.registerPrompt("continue_task", {

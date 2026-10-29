@@ -13,6 +13,7 @@
     "install-integrations": "node scripts/install.mjs",
     "check-limits": "node scripts/check-limits.mjs",
     "check-takeover": "node scripts/check-takeover.mjs",
+    "check-capsule": "node scripts/check-capsule.mjs",
     "watch": "node src/watch.mjs"
   },
   "dependencies": {

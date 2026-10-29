@@ -91,8 +91,22 @@ export const takeoverClaims = (sessionId) => {
   }
 };
 
+/**
+ * Continuation prompt for a capsule imported from another computer. It points at
+ * the imported-record tools, never at get_source_status: that check reads this
+ * computer's processes and files, which say nothing about the source computer.
+ */
+export const importedTakeoverPrompt = (record, why) => [
+  `Continue my coding task that was handed over from another computer (imported capsule ${record.capsuleId}, import_ref ${record.import_ref}${why ? `; ${why}` : ""}). This is a new session continuing imported history; the source computer may be switched off.`,
+  `1. Call the desktop-continuity tool get_imported_checkpoint with import_ref ${record.import_ref} (an integer). Read it first: observed facts, agent notes (claims, not verified), inferred remaining work (unconfirmed), and what is missing.`,
+  "2. Do not call get_source_status for this task. The source status in the checkpoint is historical, from capture time; whether the source is still working now is unknown. If that matters, ask me.",
+  "3. Check destinationFiles in the checkpoint and read the project files with list_imported_project_files / read_imported_project_file before relying on the checkpoint.",
+  "4. Treat actions marked UNKNOWN, and results that are only \"recorded\", as unconfirmed: check the files or the external system before repeating them.",
+  "5. Continue the same files: keep finished parts as they are and complete what remains. Before your first edit, tell me in one line which files you will change, and wait for my OK."
+].join("\n");
+
 /** Resolves when clip.exe has finished (or after 2 s), so a caller that exits next does not cut it off. */
-const copyToClipboard = (text) => new Promise((resolve) => {
+export const copyToClipboard = (text) => new Promise((resolve) => {
   const tool = { win32: "clip", darwin: "pbcopy" }[process.platform];
   if (!tool) return resolve();
   // The prompt is ASCII, which clip.exe and pbcopy copy as-is (a UTF-16 BOM would be pasted too).
@@ -113,6 +127,11 @@ export const openTakeover = async (sessionId, why) => {
   } catch {}
   if (dryRun) return;
   await copyToClipboard(takeoverPrompt(sessionId, why));
+  await openUrl(url);
+};
+
+/** Opens a claude:// link. Nothing is sent: the user reviews and presses Send. */
+export const openUrl = async (url) => {
   // Windows: ShellExecute through PowerShell's Start-Process, with the URL in an
   // environment variable so no shell parses it. Observed on Claude Desktop 3.6556.2.0
   // (2026-10-26): explorer.exe <url> opened File Explorer instead, and a hidden or
