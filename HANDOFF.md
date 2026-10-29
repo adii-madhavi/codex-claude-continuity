@@ -19,7 +19,7 @@ When ChatGPT desktop's agent (Codex, or local Work) stops or hits its usage limi
 - **Cowork finished the partial multi-file project.** Codex had implemented 2 of 4 modules; Cowork wrote the other 2; `node --test` 4/4, run locally (`evidence/2026-10-25-cowork-multifile/`).
 - **The simulated-limit hook opened a Cowork takeover draft**, once per signal, after the opener fix (`evidence/2026-10-23-simulated-limit/`).
 
-## Session Capsule integration (2026-10-29, branch `feat/session-capsule-integration`, not yet merged)
+## Session Capsule integration (2026-10-29, merged in pull requests #2 to #4)
 
 Adds cross-computer continuation without changing same-computer takeover. README, *Moving a task to another computer*, describes the flow and the route table. The contract is in `session-capsule/docs/blocker-integration.md`.
 

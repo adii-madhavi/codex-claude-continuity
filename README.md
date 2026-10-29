@@ -241,9 +241,7 @@ Build the extension with `npm install && npm run build:mcpb`, then open
 Extensions). It
 replaces the manual `claude_desktop_config.json` entry for the read-only server.
 
-The plugin files live on branch `feat/session-capsule-integration` until it is merged; before
-that, clone the branch and pass the local folder to `marketplace add` instead of
-`adii-madhavi/codex-claude-continuity`. On macOS, GUI apps start without Homebrew's `PATH`; if a
+On macOS, GUI apps start without Homebrew's `PATH`; if a
 hook reports `node: command not found`, use the manual setup below, which writes node's absolute
 path.
 
