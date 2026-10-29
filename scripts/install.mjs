@@ -3,7 +3,7 @@
 //   2. MCP servers in Claude Desktop's claude_desktop_config.json (read-only retrieval, plus an
 //      optional writable filesystem server scoped to folders you name).
 // usage: node scripts/install.mjs [--claude-config <path>] [--writable-folder <dir>]... [--dry-run]
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,22 @@ const claudeConfigCandidates = () => [
   ...(process.env.APPDATA ? [path.join(process.env.APPDATA, "Claude", "claude_desktop_config.json")] : []),
   path.join(os.homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json")
 ];
+
+// macOS GUI apps start with a minimal PATH (no /opt/homebrew/bin), so outside Windows
+// hooks and MCP servers name node by absolute path. Prefer the PATH entry (for example
+// /opt/homebrew/bin/node) over process.execPath, which Homebrew resolves to a versioned
+// Cellar folder that the next `brew upgrade node` removes.
+const nodeBin = () => {
+  if (process.platform === "win32") return process.execPath;
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(dir, "node");
+    try {
+      if (realpathSync(candidate) === realpathSync(process.execPath)) return candidate;
+    } catch {}
+  }
+  return process.execPath;
+};
+const quoted = (p) => (/\s/.test(p) ? JSON.stringify(p) : p);
 
 const readJson = (file, fallback) => (existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : fallback);
 
@@ -64,7 +80,7 @@ else {
   // Point every hook at this clone's hook.mjs (the repo copy names the original D:\ checkout).
   // Forward slashes work for node in every shell Codex uses; quote only when needed.
   const hookScript = path.join(root, "src", "hook.mjs").replaceAll("\\", "/");
-  const command = `node ${/\s/.test(hookScript) ? JSON.stringify(hookScript) : hookScript}`;
+  const command = `${process.platform === "win32" ? "node" : quoted(nodeBin())} ${quoted(hookScript)}`;
   const hooksFile = path.join(pluginDir, "hooks", "hooks.json");
   const pluginHooks = readJson(hooksFile, { hooks: {} });
   for (const groups of Object.values(pluginHooks.hooks)) for (const g of groups) for (const h of g.hooks) h.command = command;
@@ -89,13 +105,13 @@ if (marketplace.name !== MARKETPLACE) console.log(`note: marketplace is named "$
 const claudeConfig = claudeConfigCandidates().find(existsSync) ?? claudeConfigCandidates()[0];
 const config = readJson(claudeConfig, {});
 config.mcpServers ??= {};
-config.mcpServers["desktop-continuity"] = { command: process.execPath, args: [path.join(root, "src", "mcp-server.mjs")] };
+config.mcpServers["desktop-continuity"] = { command: nodeBin(), args: [path.join(root, "src", "mcp-server.mjs")] };
 const writable = flag("--writable-folder").map((dir) => path.resolve(dir));
 if (writable.length > 0) {
   config.mcpServers["continuity-files"] = {
-    command: process.execPath,
+    command: nodeBin(),
     args: [path.join(root, "node_modules", "@modelcontextprotocol", "server-filesystem", "dist", "index.js"), ...writable]
   };
 }
 save(claudeConfig, config);
-console.log("\nNext: restart ChatGPT, install \"Desktop continuity\" from Personal plugins and trust its hooks;\nfully quit Claude Desktop from the tray and reopen it.");
+console.log(`\nNext: restart ChatGPT, install "Desktop continuity" from Personal plugins and trust its hooks;\nfully quit Claude Desktop (${process.platform === "darwin" ? "Cmd+Q" : "from the tray"}) and reopen it.`);

@@ -169,7 +169,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const gone = missingFolder(sessionId);
   console.log(takeoverUrl(sessionId, "").startsWith("claude://cowork")
     ? `Opened a Claude Desktop Cowork session for ${sessionId} with the prompt prefilled and its project folder attached.\nConfirm the folder, review the prompt, then press Send. (The prompt is also on the clipboard.)`
-    : `Opened a new Claude Desktop chat for ${sessionId}; the continuation prompt is on the clipboard.\n${gone ? `The recorded folder ${gone} no longer exists, so no folder was attached; the prompt tells Claude to ask where it moved. ` : ""}Press Ctrl+V, review it, then press Send.`);
+    : `Opened a new Claude Desktop chat for ${sessionId}; the continuation prompt is on the clipboard.\n${gone ? `The recorded folder ${gone} no longer exists, so no folder was attached; the prompt tells Claude to ask where it moved. ` : ""}Press ${process.platform === "darwin" ? "Cmd+V" : "Ctrl+V"}, review it, then press Send.`);
   if (waitArg) {
     const limit = Number(waitArg.split("=")[1]) || 240;
     console.log(`Waiting up to ${limit} s for the destination to call desktop-continuity for this session...`);

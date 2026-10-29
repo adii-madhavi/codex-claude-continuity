@@ -23,7 +23,7 @@ When ChatGPT desktop's agent (Codex, or local Work) stops or hits its usage limi
 
 1. **`continue_latest` in the `/` menu.** Not confirmed. MCP prompts are user-invoked and their UI placement is app-specific. The supported invocation is `node src/takeover.mjs` (no id: newest unfinished session; it refuses when the choice is ambiguous).
 2. **Real-limit behaviour.** Whether Codex fires Stop on a real limit, and whether the takeover launch works from inside Codex's hook sandbox. `src/watch.mjs` avoids the first dependency; neither has been observed on a real limit.
-3. **macOS.** The macOS code paths are written but have not been run.
+3. **macOS, live.** Checks and code paths were run on a Mac on 2026-10-29 (README, *macOS*). Still to do there: install for real, trust the hooks, and repeat a demo end to end. That covers `open claude://cowork/...` and hooks inside Codex's macOS sandbox.
 
 The recorded sessions and demo folders exist **only on the Windows PC**. On a new machine, rerun the demos from scratch.
 
@@ -35,7 +35,7 @@ The recorded sessions and demo folders exist **only on the Windows PC**. On a ne
 3. **Quit Claude Desktop fully and reopen it.** The MCP server only reloads on a full quit; a quick restart did not reload it on Windows.
 4. Run the checks: `node scripts/check.mjs`, `node scripts/check-limits.mjs`, `node scripts/check-takeover.mjs`.
 
-The macOS code paths are written but **not yet run on a Mac**: `open` and `pbcopy` in `src/takeover.mjs`, `pgrep -x ChatGPT` in `src/source.mjs`, and the installer's hook path. `scripts/demo/desktop.ps1` is Windows-only.
+Run on a Mac on 2026-10-29: the three checks pass; `pbcopy` and `pgrep -x ChatGPT` work; the installer works against a throwaway `HOME`, and its hook records under a GUI-style minimal PATH (it now names node by absolute path). Not yet run: `open claude://...` and a live demo. Install from a permanent folder, because the hooks and MCP config point at the clone. `scripts/demo/desktop.ps1` is Windows-only.
 
 ## To reproduce a demo on a new machine
 
